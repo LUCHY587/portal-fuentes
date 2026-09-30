@@ -160,7 +160,9 @@ export function pdfRecibo(cfg, info, p) {
   doc.text(txt, 15, 42); let y = 42 + txt.length * 6 + 8; doc.setFontSize(10);
   y = fila(doc, y, "Alquiler " + periodo(p.periodo), money(p.alquiler));
   if (+p.punitorio) y = fila(doc, y, "Punitorios", money(p.punitorio));
-  if (+p.otros) y = fila(doc, y, p.otros_detalle || "Otros conceptos", money(p.otros));
+  const cs = Array.isArray(p.conceptos) ? p.conceptos : [];
+  if (cs.length) for (const k of cs) y = fila(doc, y, k.concepto + (k.inquilino < 0 ? " (se descuenta)" : ""), (k.inquilino < 0 ? "− " : "") + money(k.monto));
+  else if (+p.otros) y = fila(doc, y, p.otros_detalle || "Otros conceptos", money(p.otros));
   y = fila(doc, y, "TOTAL", money(p.total), true);
   doc.setFont("helvetica", "normal");
   doc.text("Medio de pago: " + p.medio + (p.modalidad === "dividida" ? " (dividida: propietario e inmobiliaria)" : ""), 15, y + 2);

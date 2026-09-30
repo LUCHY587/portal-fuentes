@@ -233,7 +233,7 @@ function pendientesLiquidar() {
     if (!by.has(c.propietario_id)) by.set(c.propietario_id, { pid: c.propietario_id, items: [] });
     by.get(c.propietario_id).items.push({ c, p });
   }
-  return [...by.values()].map((g) => { const bruto = r2(g.items.reduce((s, i) => s + +i.p.total, 0)), com = r2(g.items.reduce((s, i) => s + +i.p.honorarios, 0)); return { ...g, bruto, com, neto: r2(bruto - com) }; }).sort((a, b) => b.neto - a.neto);
+  return [...by.values()].map((g) => { const com = r2(g.items.reduce((s, i) => s + +i.p.honorarios, 0)), neto = r2(g.items.reduce((s, i) => s + +i.p.neto_propietario, 0)); return { ...g, bruto: r2(neto + com), com, neto }; }).sort((a, b) => b.neto - a.neto);
 }
 function vLiquidaciones() {
   const pend = pendientesLiquidar();
@@ -388,13 +388,12 @@ function modalCobro(id) {
     <label>Fecha de cobro<input type="date" id="co-fecha" name="fecha" value="${isoHoy()}" required></label>
     <label>Alquiler<input type="number" step="0.01" id="co-alquiler" name="alquiler" required></label>
     <label>Punitorio <span id="co-punit-ayuda"></span><input type="number" step="0.01" id="co-punitorio" name="punitorio" value="0"></label>
-    <label>Otros conceptos<input type="number" step="0.01" id="co-otros" name="otros" value="0"></label>
-    <label>Detalle de otros conceptos<input type="text" id="co-otrosdet" name="otros_detalle" placeholder="Ej.: Expensas octubre"></label>
+    ${bloqueConceptos("co")}
     <label>Medio de pago<select id="co-medio" name="medio">${MEDIOS.map((m) => `<option>${m}</option>`).join("")}</select></label>
     <label>Observaciones<input type="text" id="co-obs" name="obs"></label>
-    <div class="full total-line"><span>Total</span><span class="mono" id="co-total"></span></div>
+    <div class="full resumen" id="co-resumen"></div>
     <div class="full row"><button class="btn primary" type="submit" id="co-ok">Registrar y enviar recibo</button><button class="btn" type="button" data-cerrar>Cancelar</button></div>
-  </form>`);
+  </form>`, true);
   cobroPeriodo();
 }
 function cobroPeriodo() {
@@ -405,7 +404,45 @@ function cobroPeriodo() {
   $("#co-punit-ayuda").textContent = x && x.punitorioSugerido ? `(sugerido ${money(x.punitorioSugerido)} por ${x.dias} días; 0 para bonificar)` : x && x.enTolerancia ? "(en tolerancia)" : "";
   cobroTotal();
 }
-function cobroTotal() { const f = $("#f-cobro"); if (f) $("#co-total").textContent = money((+f.alquiler.value || 0) + (+f.punitorio.value || 0) + (+f.otros.value || 0)); }
+function cobroTotal() { const f = $("#f-cobro"); if (f) $("#co-resumen").innerHTML = resumenCobro(f, S.contratos.get(+f.dataset.id)); }
+
+/* ---------- conceptos adicionales (municipal, agua, expensas…) ---------- */
+const CONCEPTOS_SUG = ["Municipal (ABL)", "Agua", "Expensas", "Luz", "Gas", "Seguro", "Reparación", "Gastos de contrato"];
+function bloqueConceptos(pref) {
+  return `<div class="full conceptos" id="${pref}-conceptos">
+    <div class="ph"><h2>Conceptos adicionales</h2><button type="button" class="btn small" data-addconcepto="${pref}">+ Agregar concepto</button></div>
+    <div class="filas"></div>
+    <datalist id="dl-conceptos">${CONCEPTOS_SUG.map((c) => `<option value="${c}"></option>`).join("")}</datalist>
+    <label class="check"><input type="checkbox" id="${pref}-admalq" name="admin_alquiler" checked> Cobrar administración sobre el alquiler</label>
+  </div>`;
+}
+function filaConcepto() {
+  return `<div class="concepto-fila">
+    <input type="text" list="dl-conceptos" data-c="concepto" placeholder="Concepto (ej.: Expensas)" aria-label="Concepto" required>
+    <input type="number" step="0.01" min="0.01" data-c="monto" placeholder="Importe" aria-label="Importe" required>
+    <select data-c="inquilino" aria-label="Efecto para el inquilino"><option value="1">Inquilino: suma</option><option value="-1">Inquilino: resta</option></select>
+    <select data-c="propietario" aria-label="Efecto para el propietario"><option value="1">Propietario: suma</option><option value="-1">Propietario: resta</option><option value="0">Propietario: no afecta</option></select>
+    <label class="check"><input type="checkbox" data-c="admin"> Aplica administración</label>
+    <button type="button" class="x" data-quitarconcepto aria-label="Quitar concepto">×</button></div>`;
+}
+function leerConceptos(f) {
+  return [...f.querySelectorAll(".concepto-fila")].map((r) => ({
+    concepto: r.querySelector('[data-c="concepto"]').value.trim(), monto: r2(r.querySelector('[data-c="monto"]').value),
+    inquilino: +r.querySelector('[data-c="inquilino"]').value, propietario: +r.querySelector('[data-c="propietario"]').value,
+    admin: r.querySelector('[data-c="admin"]').checked })).filter((k) => k.concepto && k.monto > 0);
+}
+function calcularCobro(f, c) {
+  const pct = comisionDe(c, S.cfg), alq = +f.alquiler.value || 0, pun = +f.punitorio.value || 0, admAlq = f.admin_alquiler ? f.admin_alquiler.checked : true;
+  let total = alq + pun, neto = alq + pun, hon = admAlq ? r2(alq * pct / 100) : 0;
+  for (const k of leerConceptos(f)) { total += k.inquilino * k.monto; neto += k.propietario * k.monto; if (k.admin) hon += r2(k.monto * pct / 100); }
+  return { total: r2(total), hon: r2(hon), neto: r2(neto - hon), pct };
+}
+function resumenCobro(f, c) {
+  const x = calcularCobro(f, c);
+  return `<div class="total-line"><span>Total a cobrar al inquilino</span><span class="mono">${money(x.total)}</span></div>
+    <div class="linea"><span>Honorarios de administración (${x.pct}%)</span><span class="mono">${money(x.hon)}</span></div>
+    <div class="linea"><span>Le corresponde al propietario</span><span class="mono">${money(x.neto)}</span></div>`;
+}
 
 function modalAprobar(eid) {
   const e = S.envios.find((x) => x.id === +eid); const c = S.contratos.get(e.contrato_id);
@@ -421,13 +458,14 @@ function modalAprobar(eid) {
     <label>Punitorio ${d && d.punitorioSugerido ? `(sugerido ${money(d.punitorioSugerido)}; 0 = bonificado)` : ""}<input type="number" step="0.01" id="ap-punitorio" name="punitorio" value="${pun}"></label>
     <label>Fecha del pago<input type="date" id="ap-fecha" name="fecha" value="${ymDe(e.created_at) ? e.created_at.slice(0, 10) : isoHoy()}"></label>
     <label>Observaciones para el recibo<input type="text" id="ap-obs" name="obs" value="${esc(e.observaciones || "")}"></label>
-    <div class="full total-line"><span>Total del recibo</span><span class="mono" id="ap-total"></span></div>
+    ${bloqueConceptos("ap")}
+    <div class="full resumen" id="ap-resumen"></div>
     <p class="full muted" style="margin:0">Al aprobar se genera el recibo${c.forma_pago === "dividida" ? ", la liquidación del propietario" : ""} y se avisa al inquilino y al propietario.</p>
     <div class="full row"><button class="btn primary" type="submit" id="ap-ok">Aprobar</button><button class="btn" type="button" data-cerrar>Cancelar</button></div>
-  </form>`);
+  </form>`, true);
   aprobarTotal();
 }
-function aprobarTotal() { const f = $("#f-aprobar"); if (f) $("#ap-total").textContent = money((+f.alquiler.value || 0) + (+f.punitorio.value || 0)); }
+function aprobarTotal() { const f = $("#f-aprobar"); if (!f) return; const e = S.envios.find((x) => x.id === +f.dataset.id); $("#ap-resumen").innerHTML = resumenCobro(f, S.contratos.get(e.contrato_id)); }
 
 function modalRechazar(eid) {
   abrirModal(`<div class="mh"><h2>Rechazar envío</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
@@ -442,10 +480,15 @@ function modalRecibo(pid) {
   abrirModal(`<div class="mh"><h2>Recibo ${pad5(p.recibo_nro)}</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
   <div class="recibo"><div class="rt"><div><b>${esc(S.cfg.nombre)}</b><div class="muted">${esc(S.cfg.domicilio)}</div></div><div class="num"><b>N° ${pad5(p.recibo_nro)}</b><div class="muted">${fecha(p.fecha)}</div></div></div>
   <p>Recibimos de <b>${esc(i.nombre)}</b> la suma de <b>${money(p.total)}</b> en concepto de alquiler del período <b>${periodo(p.periodo)}</b> de <b>${esc(c.direccion)}</b>.</p>
-  <div class="tw"><table><tbody><tr><td>Alquiler</td><td class="num">${money(p.alquiler)}</td></tr>${+p.punitorio ? `<tr><td>Punitorios</td><td class="num">${money(p.punitorio)}</td></tr>` : ""}${+p.otros ? `<tr><td>${esc(p.otros_detalle || "Otros")}</td><td class="num">${money(p.otros)}</td></tr>` : ""}<tr><td><b>Total</b> · ${esc(p.medio)}</td><td class="num"><b>${money(p.total)}</b></td></tr></tbody></table></div>
+  <div class="tw"><table><tbody><tr><td>Alquiler</td><td class="num">${money(p.alquiler)}</td></tr>${+p.punitorio ? `<tr><td>Punitorios</td><td class="num">${money(p.punitorio)}</td></tr>` : ""}${filasConceptos(p)}<tr><td><b>Total</b> · ${esc(p.medio)}</td><td class="num"><b>${money(p.total)}</b></td></tr></tbody></table></div>
   ${p.anulado ? `<span class="chip bad">Anulado</span>` : ""}</div>
   <div class="row"><button class="btn primary" data-recibopdf="${p.id}">Descargar PDF</button><button class="btn" data-recibotxt="${p.id}">Copiar para WhatsApp</button>${wa(i.telefono) ? `<a class="btn" href="${wa(i.telefono)}" target="_blank" rel="noopener">WhatsApp del inquilino</a>` : ""}</div>
   <p class="muted" style="margin:0">El inquilino también puede descargarlo desde el portal${i.user_id ? "" : " (todavía no tiene acceso)"}.</p>`);
+}
+function filasConceptos(p) {
+  const cs = Array.isArray(p.conceptos) ? p.conceptos : [];
+  if (!cs.length) return +p.otros ? `<tr><td>${esc(p.otros_detalle || "Otros")}</td><td class="num">${money(p.otros)}</td></tr>` : "";
+  return cs.map((k) => `<tr><td>${esc(k.concepto)}${k.inquilino < 0 ? ' <span class="muted">(se descuenta)</span>' : ""}</td><td class="num">${k.inquilino < 0 ? "− " : ""}${money(k.monto)}</td></tr>`).join("");
 }
 function buscarPago(pid) { for (const [cid, l] of S.pg) { const f = l.find((x) => x.id === +pid); if (f) return { p: f, c: S.contratos.get(cid) }; } return {}; }
 
@@ -466,7 +509,7 @@ function modalLiquidar(pid) {
   abrirModal(`<div class="mh"><div><h2>Liquidar a ${esc(P(g.pid).nombre)}</h2><div class="muted">${esc(P(g.pid).alias || P(g.pid).cbu || "Sin datos bancarios cargados")}</div></div><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
   <form id="f-liq" data-pid="${g.pid}" class="form">
   <div class="full tw"><table><thead><tr><th></th><th>Propiedad</th><th>Período</th><th>Recibo</th><th class="num">Cobrado</th><th class="num">Honorarios</th><th class="num">Neto</th></tr></thead><tbody>
-  ${g.items.map((i) => `<tr><td><input type="checkbox" id="lq-${i.p.id}" data-pago="${i.p.id}" checked></td><td>${esc(i.c.direccion)}</td><td>${periodo(i.p.periodo)}</td><td class="mono">${pad5(i.p.recibo_nro)}</td><td class="num">${money(i.p.total)}</td><td class="num">${money(i.p.honorarios)}</td><td class="num">${money(i.p.total - i.p.honorarios)}</td></tr>`).join("")}</tbody></table></div>
+  ${g.items.map((i) => `<tr><td><input type="checkbox" id="lq-${i.p.id}" data-pago="${i.p.id}" checked></td><td>${esc(i.c.direccion)}</td><td>${periodo(i.p.periodo)}</td><td class="mono">${pad5(i.p.recibo_nro)}</td><td class="num">${money(+i.p.neto_propietario + +i.p.honorarios)}</td><td class="num">${money(i.p.honorarios)}</td><td class="num">${money(i.p.neto_propietario)}</td></tr>`).join("")}</tbody></table></div>
   <label>Otras deducciones<input type="number" step="0.01" id="lq-ded" name="ded" value="0"></label>
   <label>Detalle<input type="text" id="lq-det" name="det" placeholder="Ej.: Reparación de canilla"></label>
   <label>Fecha<input type="date" id="lq-fecha" name="fecha" value="${isoHoy()}"></label>
@@ -479,7 +522,7 @@ function modalLiquidar(pid) {
 function liqSel() { const f = $("#f-liq"); return [...f.querySelectorAll("[data-pago]")].filter((x) => x.checked).map((x) => +x.dataset.pago); }
 function liqTotal() {
   const f = $("#f-liq"); if (!f) return; const ids = liqSel(); let n = 0;
-  for (const l of S.pg.values()) for (const p of l) if (ids.includes(p.id)) n += p.total - p.honorarios;
+  for (const l of S.pg.values()) for (const p of l) if (ids.includes(p.id)) n += +p.neto_propietario;
   $("#lq-total").textContent = money(n - (+f.ded.value || 0));
 }
 async function subirComprobanteLiquidacion(liq, file) {
@@ -535,6 +578,8 @@ document.addEventListener("click", async (ev) => {
     if (d.fichatab) { fichaTab = d.fichatab; await abrirFicha(d.id); return; }
     if (d.persona) { modalPersona(d.persona); return; }
     if (d.cobrar) { modalCobro(d.cobrar); return; }
+    if (d.addconcepto) { const box = $(`#${d.addconcepto}-conceptos .filas`); box.insertAdjacentHTML("beforeend", filaConcepto()); box.lastElementChild.querySelector("input").focus(); cobroTotal(); aprobarTotal(); return; }
+    if (d.quitarconcepto !== undefined) { el.closest(".concepto-fila").remove(); cobroTotal(); aprobarTotal(); return; }
     if (d.aprobar) { modalAprobar(d.aprobar); return; }
     if (d.rechazar) { modalRechazar(d.rechazar); return; }
     if (d.servicios) { if (await rpc("revisar_servicios", { p_envio: +d.servicios }, "Revisado. Le avisamos al propietario.")) await recargar(); return; }
@@ -598,12 +643,12 @@ document.addEventListener("submit", async (ev) => {
   try {
     if (f.id === "f-login") return await login(v);
     if (f.id === "f-cobro") {
-      const pg = await rpc("registrar_pago", { p_contrato: +f.dataset.id, p_periodo: v.periodo, p_fecha: v.fecha, p_alquiler: +v.alquiler || 0, p_punitorio: +v.punitorio || 0, p_otros: +v.otros || 0, p_otros_detalle: v.otros_detalle, p_medio: v.medio, p_obs: v.obs }, "Cobro registrado");
+      const pg = await rpc("registrar_pago", { p_contrato: +f.dataset.id, p_periodo: v.periodo, p_fecha: v.fecha, p_alquiler: +v.alquiler || 0, p_punitorio: +v.punitorio || 0, p_conceptos: leerConceptos(f), p_admin_alquiler: f.admin_alquiler.checked, p_medio: v.medio, p_obs: v.obs }, "Cobro registrado");
       if (pg) { await cargarTodo(); render(); modalRecibo(pg.id); }
       return;
     }
     if (f.id === "f-aprobar") {
-      const pg = await rpc("aprobar_envio", { p_envio: +f.dataset.id, p_alquiler: +v.alquiler || 0, p_punitorio: +v.punitorio || 0, p_obs: v.obs, p_fecha: v.fecha || null }, "Aprobado. Se generó el recibo y avisamos al inquilino y al propietario.");
+      const pg = await rpc("aprobar_envio", { p_envio: +f.dataset.id, p_alquiler: +v.alquiler || 0, p_punitorio: +v.punitorio || 0, p_conceptos: leerConceptos(f), p_admin_alquiler: f.admin_alquiler.checked, p_obs: v.obs, p_fecha: v.fecha || null }, "Aprobado. Se generó el recibo y avisamos al inquilino y al propietario.");
       if (pg) { cerrarModal(); await recargar(); }
       return;
     }
