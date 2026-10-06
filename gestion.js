@@ -313,7 +313,7 @@ function vConfig() {
   return `<div class="head"><div><h1>Configuración</h1><p>${puedeAdmin() ? "Datos que aparecen en recibos, liquidaciones y en el portal." : "Solo un administrador puede cambiar la configuración."}</p></div></div>
   <form class="panel form" id="f-config">
     <label class="full">Nombre de la inmobiliaria<input type="text" id="cfg-nombre" name="nombre" value="${esc(c.nombre)}" ${dis}></label>
-    ${campo("domicilio", "Domicilio")}${campo("telefono", "Teléfono")}${campo("cuit", "CUIT")}${campo("email", "Email de contacto", "email")}
+    ${campo("domicilio", "Domicilio")}${campo("telefono", "Teléfono")}${campo("whatsapp", "WhatsApp")}${campo("cuit", "CUIT")}${campo("email", "Email de contacto", "email")}
     <h2 class="full">Cuenta de la inmobiliaria (para que los inquilinos transfieran los honorarios)</h2>
     ${campo("banco", "Banco")}${campo("titular", "Titular")}${campo("cbu", "CBU / CVU")}${campo("alias", "Alias")}
     <h2 class="full">Reglas de cobro</h2>
@@ -912,7 +912,7 @@ document.addEventListener("click", async (ev) => {
     if (d.servicios) { if (await rpc("revisar_servicios", { p_envio: +d.servicios }, "Revisado. Le avisamos al propietario.")) await recargar(); return; }
     if (d.archivo) { await verArchivo(d.archivo); return; }
     if (d.recibo) { modalRecibo(d.recibo); return; }
-    if (d.recibopdf) { const { p, c } = buscarPago(d.recibopdf); const r = pdfRecibo(S.cfg, { direccion: c.direccion, inquilino: inq(c), carpeta: c.carpeta }, p); r.doc.save(r.nombre); return; }
+    if (d.recibopdf) { const { p, c } = buscarPago(d.recibopdf); const r = pdfRecibo(S.cfg, { direccion: c.direccion, inquilino: inq(c), carpeta: c.carpeta, propietario: P(c.propietario_id).nombre, propietario_doc: P(c.propietario_id).dni }, p); r.doc.save(r.nombre); return; }
     if (d.recibotxt) { const { p, c } = buscarPago(d.recibotxt); copiar(`${S.cfg.nombre}\nRECIBO N° ${pad5(p.recibo_nro)} · ${fecha(p.fecha)}\nRecibimos de ${inq(c)} ${money(p.total)} por el alquiler de ${periodo(p.periodo)} de ${c.direccion}.\nTambién podés descargarlo en ${PORTAL_URL}`); return; }
     if (d.anularpago) { if (!confirmar("¿Anular el cobro?")) return; if (await rpc("anular_pago", { p_pago: +d.anularpago }, "Cobro anulado")) { cerrarModal(); await recargar(); } return; }
     if (d.ajustar) { modalAjuste(d.ajustar); return; }
@@ -923,7 +923,7 @@ document.addEventListener("click", async (ev) => {
       const { error } = await q; if (error) throw error; toast(d.bonificar ? "Punitorio bonificado. El inquilino ya lo ve en el portal." : "Bonificación quitada"); await cargarTodo(); await abrirFicha(cid); render(); return;
     }
     if (d.liquidar) { abrirLiqProp(d.liquidar); return; }
-    if (d.liqpdf) { const l = S.liqs.find((x) => x.id === +d.liqpdf); const r = pdfLiquidacion(S.cfg, l, P(l.propietario_id).nombre); r.doc.save(r.nombre); return; }
+    if (d.liqpdf) { const l = S.liqs.find((x) => x.id === +d.liqpdf); const r = pdfLiquidacion(S.cfg, l, P(l.propietario_id)); r.doc.save(r.nombre); return; }
     if (d.liqcomp) { const inp = document.createElement("input"); inp.type = "file"; inp.accept = ARCHIVOS_OK; inp.onchange = async () => { try { await subirComprobanteLiquidacion(S.liqs.find((x) => x.id === +d.liqcomp), inp.files[0]); toast("Comprobante subido. El propietario ya lo ve en el portal."); } catch (e) { toast(mensajeError(e), "bad"); } }; inp.click(); return; }
     if (d.liqanular) { if (!confirmar()) return; if (await rpc("anular_liquidacion", { p_liq: +d.liqanular }, "Liquidación anulada")) await recargar(); return; }
     if (d.dia) { S.cajaDia = d.dia; render(); return; }

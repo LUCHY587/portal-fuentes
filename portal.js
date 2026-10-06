@@ -222,8 +222,8 @@ document.addEventListener("click", async (ev) => {
     if (d.enviar) { modalEnvioPago(d.enviar); return; }
     if (d.servicios) { modalEnvioServicios(d.servicios); return; }
     if (d.archivo) { await verArchivo(d.archivo); return; }
-    if (d.recibo) { const p = S.pg.find((x) => x.id === +d.recibo); const c = S.contratos.find((x) => x.id === p.contrato_id); const r = pdfRecibo(S.cfg, { direccion: c.direccion, inquilino: c.inquilino_nombre, carpeta: c.carpeta }, p); r.doc.save(r.nombre); return; }
-    if (d.liq) { const l = S.liqs.find((x) => x.id === +d.liq); const nom = (S.yo.find((p) => p.id === l.propietario_id) || S.yo[0] || {}).nombre || ""; const r = pdfLiquidacion(S.cfg, l, nom); r.doc.save(r.nombre); return; }
+    if (d.recibo) { const p = S.pg.find((x) => x.id === +d.recibo); const c = S.contratos.find((x) => x.id === p.contrato_id); const r = pdfRecibo(S.cfg, { direccion: c.direccion, inquilino: c.inquilino_nombre, carpeta: c.carpeta, propietario: c.propietario_nombre }, p); r.doc.save(r.nombre); return; }
+    if (d.liq) { const l = S.liqs.find((x) => x.id === +d.liq); const yo = S.yo.find((p) => p.id === l.propietario_id) || S.yo[0] || {}; const r = pdfLiquidacion(S.cfg, l, yo); r.doc.save(r.nombre); return; }
     if (d.a === "avisos") {
       abrirModal(`<div class="mh"><h2>Avisos</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div>${S.avisos.length ? S.avisos.map((a) => `<div class="aviso ${a.leida ? "" : "nuevo"}"><b>${esc(a.titulo)}</b><div>${esc(a.texto || "")}</div><div class="muted">${fecha(a.created_at)}</div></div>`).join("") : `<p class="muted">No tenés avisos.</p>`}`);
       const ids = S.avisos.filter((a) => !a.leida).map((a) => a.id);
