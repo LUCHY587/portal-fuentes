@@ -69,6 +69,28 @@ export function deuda(c, aj, pg, cfg, ov, hoy = isoHoy()) {
   return out;
 }
 
+// Deuda a partir de los renglones pendientes de la planilla (cargos)
+export function deudaCargos(c, cargos, cfg, ov, hoy = isoHoy()) {
+  const por = new Map();
+  for (const g of cargos || []) { if (g.anulado || +g.saldo <= 0.005) continue; if (!por.has(g.periodo)) por.set(g.periodo, []); por.get(g.periodo).push(g); }
+  return [...por.keys()].sort().map((p) => {
+    const gs = por.get(p).slice().sort((a, b) => (a.tipo === "alquiler" ? 0 : 1) - (b.tipo === "alquiler" ? 0 : 1) || a.id - b.id);
+    const saldo = r2(gs.reduce((s, g) => s + +g.saldo, 0)), alqSaldo = r2(gs.filter((g) => g.tipo === "alquiler").reduce((s, g) => s + +g.saldo, 0));
+    const vto = vtoDe(c, cfg, p), dias = Math.max(0, diasEntre(vto, hoy));
+    const sugerido = punitorioSugerido(alqSaldo, dias, cfg);
+    const bonif = !!ov && Object.prototype.hasOwnProperty.call(ov, p);
+    return { p, monto: saldo, saldo, alqSaldo, vto, vencido: hoy > vto, dias, enTolerancia: hoy > vto && dias <= (+cfg.dias_gracia || 0),
+             punitorio: bonif ? +ov[p] : sugerido, punitorioSugerido: sugerido, bonificado: bonif, cargos: gs };
+  });
+}
+// División de renglones: cuánto va al propietario y cuánto a la inmobiliaria. lineas: [{monto, punitorio, admin, propietario}]
+export function divisionLineas(c, cfg, lineas) {
+  const pct = comisionDe(c, cfg); let total = 0, prop = 0, hon = 0;
+  for (const l of lineas) { const m = +l.monto || 0, pu = +l.punitorio || 0, h = l.admin ? r2(m * pct / 100) : 0, sg = l.propietario == null ? 1 : +l.propietario;
+    total += m + pu; hon += h; prop += sg * (m + pu) - h; }
+  return { total: r2(total), propietario: r2(prop), inmobiliaria: r2(total - prop), honorarios: r2(hon), pct };
+}
+
 // División del pago cuando el inquilino transfiere por separado al propietario y a la inmobiliaria
 export function division(c, cfg, alquiler, punitorio) {
   const hon = r2(alquiler * comisionDe(c, cfg) / 100);
@@ -158,11 +180,20 @@ export function pdfRecibo(cfg, info, p) {
   const doc = pdfBase(cfg, "RECIBO", p.recibo_nro, p.fecha); doc.setFontSize(11);
   const txt = doc.splitTextToSize(`Recibimos de ${info.inquilino} la suma de ${money(p.total)} en concepto de alquiler del período ${periodo(p.periodo)} de la propiedad ubicada en ${info.direccion}.`, 180);
   doc.text(txt, 15, 42); let y = 42 + txt.length * 6 + 8; doc.setFontSize(10);
-  y = fila(doc, y, "Alquiler " + periodo(p.periodo), money(p.alquiler));
-  if (+p.punitorio) y = fila(doc, y, "Punitorios", money(p.punitorio));
-  const cs = Array.isArray(p.conceptos) ? p.conceptos : [];
-  if (cs.length) for (const k of cs) y = fila(doc, y, k.concepto + (k.inquilino < 0 ? " (se descuenta)" : ""), (k.inquilino < 0 ? "− " : "") + money(k.monto));
-  else if (+p.otros) y = fila(doc, y, p.otros_detalle || "Otros conceptos", money(p.otros));
+  const det = Array.isArray(p.detalle) && p.detalle.length ? p.detalle : null;
+  if (det) {
+    for (const k of det) {
+      if (y > 260) { doc.addPage(); y = 20; }
+      y = fila(doc, y, doc.splitTextToSize(k.concepto + (k.inquilino < 0 ? " (se descuenta)" : ""), 140)[0], (k.inquilino < 0 ? "− " : "") + money(k.monto));
+      if (+k.punitorio) y = fila(doc, y, "   Punitorios", money(k.punitorio));
+    }
+  } else {
+    y = fila(doc, y, "Alquiler " + periodo(p.periodo), money(p.alquiler));
+    if (+p.punitorio) y = fila(doc, y, "Punitorios", money(p.punitorio));
+    const cs = Array.isArray(p.conceptos) ? p.conceptos : [];
+    if (cs.length) for (const k of cs) y = fila(doc, y, k.concepto + (k.inquilino < 0 ? " (se descuenta)" : ""), (k.inquilino < 0 ? "− " : "") + money(k.monto));
+    else if (+p.otros) y = fila(doc, y, p.otros_detalle || "Otros conceptos", money(p.otros));
+  }
   y = fila(doc, y, "TOTAL", money(p.total), true);
   doc.setFont("helvetica", "normal");
   doc.text("Medio de pago: " + p.medio + (p.modalidad === "dividida" ? " (dividida: propietario e inmobiliaria)" : ""), 15, y + 2);
@@ -177,17 +208,23 @@ export function pdfRecibo(cfg, info, p) {
 export function pdfLiquidacion(cfg, l, propietario) {
   const doc = pdfBase(cfg, "LIQUIDACIÓN", l.nro, l.fecha); doc.setFontSize(11);
   doc.text("Propietario: " + propietario, 15, 40); let y = 52; doc.setFontSize(9);
-  doc.setFont("helvetica", "bold"); doc.text("Propiedad / Período", 15, y); doc.text("Cobrado", 140, y, { align: "right" });
-  doc.text("Honorarios", 168, y, { align: "right" }); doc.text("Neto", 195, y, { align: "right" }); y += 7; doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold"); doc.text("Detalle", 15, y); doc.text("Cobrado", 140, y, { align: "right" });
+  doc.text("Administración", 168, y, { align: "right" }); doc.text("Total", 195, y, { align: "right" }); y += 7; doc.setFont("helvetica", "normal");
   for (const i of l.items || []) {
-    if (y > 270) { doc.addPage(); y = 20; }
-    doc.text(doc.splitTextToSize(`${i.direccion} · ${periodo(i.periodo)} · Rec. ${pad5(i.recibo)}`, 95)[0], 15, y);
-    doc.text(money(i.cobrado), 140, y, { align: "right" }); doc.text(money(i.comision), 168, y, { align: "right" });
-    doc.text(money(i.cobrado - i.comision), 195, y, { align: "right" }); doc.setDrawColor(230, 218, 220); doc.line(15, y + 2.5, 195, y + 2.5); y += 7;
+    if (y > 268) { doc.addPage(); y = 20; }
+    const linea = (txt, cob, com, neto) => {
+      doc.text(doc.splitTextToSize(txt, 100)[0], 15, y);
+      if (cob != null) doc.text(money(cob), 140, y, { align: "right" });
+      if (com != null) doc.text("− " + money(com), 168, y, { align: "right" });
+      doc.text(money(neto), 195, y, { align: "right" }); doc.setDrawColor(230, 218, 220); doc.line(15, y + 2.5, 195, y + 2.5); y += 7;
+    };
+    if (i.tipo === "adelanto" || i.tipo === "particular") linea(i.descripcion, null, null, i.neto);
+    else if (i.descripcion) linea(`${i.direccion} · ${i.descripcion}${i.recibo ? " · Rec. " + pad5(i.recibo) : ""}`, i.cobrado, i.comision, i.neto ?? i.cobrado - i.comision);
+    else linea(`${i.direccion} · ${periodo(i.periodo)} · Rec. ${pad5(i.recibo)}`, i.cobrado, i.comision, i.cobrado - i.comision);
   }
   y += 4; doc.setFontSize(10);
   y = fila(doc, y, "Total cobrado", money(l.bruto)); y = fila(doc, y, "Honorarios de administración", "− " + money(l.comision));
-  if (+l.deducciones) y = fila(doc, y, l.deducciones_detalle || "Otras deducciones", "− " + money(l.deducciones));
+  if (+l.deducciones) y = fila(doc, y, "Adelantos y descuentos" + (l.deducciones_detalle ? " (" + l.deducciones_detalle + ")" : ""), "− " + money(l.deducciones));
   y = fila(doc, y, l.modalidad === "directa" ? "NETO TRANSFERIDO POR EL INQUILINO" : "NETO A PAGAR", money(l.neto), true);
   doc.setFont("helvetica", "normal"); doc.text("Forma de pago: " + (l.medio || ""), 15, y + 2);
   if (l.anulada) { doc.setTextColor(163, 38, 44); doc.setFontSize(40); doc.text("ANULADA", 105, 150, { align: "center", angle: 20 }); }

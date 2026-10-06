@@ -1,13 +1,13 @@
 // Cobranza Fuentes · Portal de inquilinos y propietarios
 import {
   sb, DOMINIO_USUARIOS, money, r2, pad5, esc, isoHoy, ymHoy, ymDe, ymSumar, periodo, fecha,
-  estadoContrato, contratoActivo, montoEn, comisionDe, deuda, division, vtoDe,
+  estadoContrato, contratoActivo, montoEn, comisionDe, deuda, deudaCargos, divisionLineas, division, vtoDe,
   toast, abrirModal, cerrarModal, copiar, mensajeError, rutaArchivo, verArchivo, ETIQUETA_ARCHIVO, ARCHIVOS_OK,
   pdfRecibo, pdfLiquidacion,
 } from "./comun.js";
 
 const $ = (s) => document.querySelector(s);
-const S = { cfg: null, contratos: [], yo: [], aj: [], pg: [], ov: [], envios: [], archivos: [], liqs: [], avisos: [], rol: null, anteriores: false, esStaff: false };
+const S = { cfg: null, contratos: [], yo: [], aj: [], pg: [], ov: [], cargos: [], envios: [], archivos: [], liqs: [], avisos: [], rol: null, anteriores: false, esStaff: false };
 const MAX_MB = 10;
 
 /* ---------- sesión ---------- */
@@ -35,6 +35,9 @@ async function iniciar() {
 }
 async function cargar(uid) {
   const q = (t, f = (x) => x) => f(sb.from(t).select("*")).then((r) => { if (r.error) throw r.error; return r.data; });
+  // generar los renglones del mes de mis contratos como inquilino (cuotas y conceptos fijos)
+  const mios = await sb.rpc("portal_contratos").then((r) => r.data || []);
+  await Promise.all(mios.filter((c) => c.rol === "inquilino").map((c) => sb.rpc("generar_cargos", { p_contrato: c.id })));
   const [cfg, contratos, yo, aj, pg, ov, envios, archivos, liqs, avisos, staff] = await Promise.all([
     sb.from("config").select("*").eq("id", 1).single().then((r) => { if (r.error) throw r.error; return r.data; }),
     sb.rpc("portal_contratos").then((r) => { if (r.error) throw r.error; return r.data; }),
@@ -43,12 +46,14 @@ async function cargar(uid) {
     q("liquidaciones", (x) => x.order("nro", { ascending: false })), q("notificaciones", (x) => x.order("created_at", { ascending: false }).limit(60)),
     sb.from("staff").select("user_id").eq("user_id", uid).maybeSingle().then((r) => r.data),
   ]);
-  Object.assign(S, { cfg, contratos, yo, aj, pg, ov, envios, archivos, liqs, avisos, esStaff: !!staff });
+  const cargos = await q("cargos", (x) => x.eq("anulado", false).gt("saldo", 0));
+  Object.assign(S, { cfg, contratos, yo, aj, pg, ov, envios, archivos, liqs, avisos, cargos, esStaff: !!staff });
 }
 const ajDe = (c) => S.aj.filter((a) => a.contrato_id === c.id);
 const pgDe = (c) => S.pg.filter((p) => p.contrato_id === c.id);
 const ovDe = (c) => Object.fromEntries(S.ov.filter((o) => o.contrato_id === c.id).map((o) => [o.periodo, +o.monto]));
-const deudaDe = (c) => deuda(c, ajDe(c), pgDe(c), S.cfg, ovDe(c));
+const deudaDe = (c) => deudaCargos(c, S.cargos.filter((g) => g.contrato_id === c.id), S.cfg, ovDe(c));
+const lineasDe = (x) => { let puesto = false; return x.cargos.map((g) => { const pu = !puesto && g.tipo === "alquiler" ? x.punitorio : 0; if (g.tipo === "alquiler") puesto = true; return { descripcion: g.descripcion, monto: +g.saldo, parcial: +g.saldo < +g.monto - 0.009, punitorio: pu, admin: g.admin, propietario: g.propietario }; }); };
 const contratoKey = (c) => ({ ...c, monto_base: +c.monto_base });
 
 /* ---------- render ---------- */
@@ -91,10 +96,10 @@ function tarjetaInquilino(c) {
     pagar = `<div class="estado ok"><b>Estás al día.</b> ${prox <= ymDe(c.fin) && montoEn(c, ajDe(c), prox) > 0 ? `El alquiler de ${periodo(prox)} es de ${money(montoEn(c, ajDe(c), prox))} y se paga del 1 al ${c.dia_vto || S.cfg.dia_vto}.` : ""}</div>`;
   } else {
     const ev = enRevision(actual.p);
-    const div = division(c, S.cfg, actual.saldo, actual.punitorio);
+    const lin = lineasDe(actual), div = divisionLineas(c, S.cfg, lin);
     const limiteSinPunitorio = fecha(ymSumar(actual.p, 0) + "-" + String(Math.min(28, (+c.dia_vto || +S.cfg.dia_vto) + (+S.cfg.dias_gracia || 0))).padStart(2, "0"));
     pagar = `<div class="apagar"><div class="ph"><div><span class="muted">A pagar</span><h3>${periodo(actual.p)}</h3></div>${ev ? `<span class="chip warn">Comprobante en revisión</span>` : actual.vencido && !actual.enTolerancia ? `<span class="chip bad">Vencido</span>` : `<span class="chip">Vence el ${fecha(actual.vto)}</span>`}</div>
-      <table><tbody><tr><td>Alquiler</td><td class="num">${money(actual.saldo)}</td></tr>
+      <table><tbody>${lin.map((l) => `<tr><td>${l.parcial ? "Saldo s/ " : ""}${esc(l.descripcion)}</td><td class="num">${money(l.monto)}</td></tr>`).join("")}
       ${actual.punitorio ? `<tr><td>Punitorio (${actual.dias} días × ${S.cfg.interes_diario}%)${actual.bonificado ? " · ajustado por la inmobiliaria" : ""}</td><td class="num">${money(actual.punitorio)}</td></tr>` : actual.bonificado ? `<tr><td>Punitorio bonificado</td><td class="num">${money(0)}</td></tr>` : ""}
       <tr class="tot"><td>Total</td><td class="num">${money(div.total)}</td></tr></tbody></table>
       ${!actual.vencido ? `<p class="muted nota">Se paga del 1 al ${c.dia_vto || S.cfg.dia_vto}. Hasta el ${limiteSinPunitorio} no se cobra punitorio.</p>` : actual.enTolerancia ? `<p class="muted nota">Estás dentro de la tolerancia: si pagás hasta el ${limiteSinPunitorio} no se cobra punitorio.</p>` : `<p class="muted nota">El punitorio es el ${S.cfg.interes_diario}% diario desde el día ${(+c.dia_vto || +S.cfg.dia_vto) + 1}. La inmobiliaria puede ajustarlo.</p>`}
@@ -103,7 +108,7 @@ function tarjetaInquilino(c) {
       ${ev ? `<p class="nota">Enviaste los comprobantes el ${fecha(ev.created_at)}. Cuando la inmobiliaria los confirme, te llega el recibo.</p>` :
         c.forma_pago === "dividida" ? `<p class="nota">Hacé dos transferencias:</p>
           ${cuentaBancaria("1 · Al propietario", div.propietario, { titular: c.prop_titular, banco: c.prop_banco, cbu: c.prop_cbu, alias: c.prop_alias })}
-          ${cuentaBancaria("2 · A la inmobiliaria (honorarios)", div.inmobiliaria, S.cfg)}
+          ${cuentaBancaria("2 · A la inmobiliaria (honorarios y gastos)", div.inmobiliaria, S.cfg)}
           <button class="btn primary grande" data-enviar="${c.id}">Ya transferí: enviar comprobantes</button>` :
         `<p class="nota">Este alquiler se paga en la inmobiliaria.</p>`}
     </div>`;
@@ -147,7 +152,7 @@ function modalEnvioPago(cid) {
   const c = contratoKey(S.contratos.find((x) => x.id === +cid && x.rol === "inquilino")); const d = deudaDe(c);
   const pend = d.filter((x) => !S.envios.some((e) => e.contrato_id === c.id && e.periodo === x.p && e.tipo === "pago" && e.estado === "pendiente"));
   if (!pend.length) { toast("No hay períodos pendientes para informar."); return; }
-  const x = pend[0], div = division(c, S.cfg, x.saldo, x.punitorio);
+  const x = pend[0], div = divisionLineas(c, S.cfg, lineasDe(x));
   abrirModal(`<div class="mh"><div><h2>Enviar comprobantes</h2><div class="muted">${esc(c.direccion)}</div></div><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
   <form class="form" id="f-pago" data-id="${c.id}">
     <label class="full">Período que pagaste<select id="ep-periodo" name="periodo">${pend.map((y) => `<option value="${y.p}">${periodo(y.p)}</option>`).join("")}</select></label>
@@ -235,7 +240,7 @@ document.addEventListener("change", (ev) => {
   if (ev.target.id === "ep-periodo") {
     const f = ev.target.form; const c = contratoKey(S.contratos.find((x) => x.id === +f.dataset.id && x.rol === "inquilino"));
     const x = deudaDe(c).find((y) => y.p === ev.target.value); if (!x) return;
-    const div = division(c, S.cfg, x.saldo, x.punitorio); f.monto_propietario.value = div.propietario; f.monto_inmobiliaria.value = div.inmobiliaria;
+    const div = divisionLineas(c, S.cfg, lineasDe(x)); f.monto_propietario.value = div.propietario; f.monto_inmobiliaria.value = div.inmobiliaria;
   }
 });
 document.addEventListener("submit", async (ev) => {
