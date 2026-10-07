@@ -97,7 +97,7 @@ function renderNav() {
   const n = { revisar: pendientesRevisar().length,
     morosos: S.cargado ? cs.filter((c) => deudaDe(c).some((d) => d.vencido && !d.enTolerancia)).length : 0,
     ajustes: S.cargado ? cs.filter((c) => contratoActivo(c) && (proximoAjuste(c, ajDe(c), S.cfg) || "9") <= ymHoy()).length : 0 };
-  const actual = S.view === "planilla" ? "cobrar" : S.view === "liqprop" ? "liquidaciones" : S.view === "nuevo" ? "contratos" : S.view;
+  const actual = S.view === "planilla" ? "cobrar" : S.view === "liqprop" ? "liquidaciones" : S.view === "nuevo" || S.view === "contrato" ? "contratos" : S.view;
   $("#nav").innerHTML = VISTAS.map(([k, l]) => `<button data-vista="${k}" ${actual === k ? 'aria-current="page"' : ""}><span>${l}</span>${n[k] ? `<span class="n">${n[k]}</span>` : ""}</button>`).join("");
   $("#quien").textContent = S.yo ? S.yo.nombre : "";
   const bt = $("#tema"); if (bt) bt.innerHTML = botonTema();
@@ -106,7 +106,7 @@ function render() {
   renderNav();
   if (!S.cargado) { $("#main").innerHTML = `<div class="cargando">Cargando contratos…</div>`; return; }
   const v = { inicio: vInicio, revisar: vRevisar, contratos: vContratos, cobrar: vCobrar, morosos: vMorosos, ajustes: vAjustes,
-    liquidaciones: vLiquidaciones, caja: vCaja, personas: vPersonas, config: vConfig, planilla: vPlanilla, liqprop: vLiqProp, nuevo: vNuevo }[S.view] || vInicio;
+    liquidaciones: vLiquidaciones, caja: vCaja, personas: vPersonas, config: vConfig, planilla: vPlanilla, liqprop: vLiqProp, nuevo: vNuevo, contrato: vContrato }[S.view] || vInicio;
   $("#main").innerHTML = v();
   if (S.view === "planilla" && S.plTab === "planilla") planillaTotal();
   if (S.view === "planilla" && S.plTab === "envios") cargarDocsPlanilla();
@@ -216,9 +216,9 @@ function vContratos() {
   <div class="row"><span class="muted">Ordenar por</span><div class="seg">${o("direccion", "Dirección (A–Z)")}${o("vencimiento", "Vencimiento (más próximo primero)")}${o("reciente", "Más recientes")}</div></div>
   <div class="tw"><table><thead><tr><th>Carpeta</th><th>Vence</th><th>Dirección</th><th>Cobranza</th><th>Liquidación</th><th class="num">Saldo pendiente</th><th>Estado</th><th></th></tr></thead><tbody>
   ${shown.map((c) => { const dd = deudaDe(c), sal = dd.reduce((s, x) => s + x.saldo, 0), venc = dd.some((x) => x.vencido && !x.enTolerancia);
-    return `<tr><td class="mono">${c.carpeta || "—"}</td><td class="num">${fecha(c.fin)}</td><td>${esc(c.direccion)}${c.forma_pago === "dividida" ? ' <span class="chip acc">Dividida</span>' : ""}</td>
+    return `<tr><td class="mono"><button class="carpeta" data-contrato="${c.id}" title="Ver y editar el contrato">${c.carpeta || "—"}</button></td><td class="num">${fecha(c.fin)}</td><td>${esc(c.direccion)}${c.forma_pago === "dividida" ? ' <span class="chip acc">Dividida</span>' : ""}</td>
     <td><button class="link" data-planilla="${c.id}">${esc(inq(c))}</button></td><td><button class="link" data-liqprop="${c.propietario_id}">${esc(prop(c))}</button></td>
-    <td class="num" ${venc ? 'style="color:var(--bad)"' : ""}>${sal ? money(sal) : "—"}</td><td>${chipEstado(c)}</td><td class="num"><button class="btn small" data-ficha="${c.id}">Ficha</button></td></tr>`; }).join("") || `<tr><td colspan="8"><div class="empty">No hay contratos con ese filtro.</div></td></tr>`}
+    <td class="num" ${venc ? 'style="color:var(--bad)"' : ""}>${sal ? money(sal) : "—"}</td><td>${chipEstado(c)}</td><td class="num"><button class="btn small" data-contrato="${c.id}">Contrato</button></td></tr>`; }).join("") || `<tr><td colspan="8"><div class="empty">No hay contratos con ese filtro.</div></td></tr>`}
   </tbody></table></div>${list.length > shown.length ? `<div class="row"><button class="btn" data-a="mas">Mostrar más</button></div>` : ""}`;
 }
 
@@ -702,6 +702,153 @@ function idPersonaDesdeTexto(txt, tipo) {
   return null;
 }
 
+/* ================= contrato (pantalla completa, como la carpeta de SPOT) ================= */
+const INDICES = [["ICL", "ICL (Banco Central)"], ["IPC", "IPC"], ["Casa Propia", "Casa Propia"], ["CAC", "CAC"], ["ICC", "ICC"], ["CER", "CER"], ["IS", "IS"],
+  ["IPIM", "IPIM"], ["UVA", "UVA"], ["RIPTE", "RIPTE"], ["Fijo", "Valor nominal (sin ajuste)"]];
+const PERIODICIDAD = [[1, "Mensual"], [2, "Bimestral"], [3, "Trimestral"], [4, "Cuatrimestral"], [6, "Semestral"], [12, "Anual"]];
+const finDeMes = (ym) => { const [y, m] = ym.split("-").map(Number); return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2, "0"); };
+function cuotasDe(inicio, fin) {                                      // meses entre inicio y fin (24 para 01/11/2025 → 31/10/2027)
+  const d = new Date(fin + "T12:00:00"); d.setDate(d.getDate() + 1);
+  const [yi, mi, di] = inicio.split("-").map(Number);
+  return Math.max(1, (d.getFullYear() - yi) * 12 + (d.getMonth() + 1 - mi) + (d.getDate() >= di ? 0 : -1));
+}
+function finDesdeCuotas(inicio, cuotas) {
+  const [y, m, dd] = inicio.split("-").map(Number); const d = new Date(y, m - 1 + +cuotas, dd, 12); d.setDate(d.getDate() - 1);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+// períodos de ajuste: Período 1 = alquiler inicial; los siguientes salen de los ajustes cargados
+function periodosDe(c, inicio, cuotas, meses) {
+  const aj = ajustesValidos(ajDe(c)), ini = ymDe(inicio), hoy = ymHoy(), out = [];
+  const n = Math.max(1, +meses || 12), total = Math.ceil(cuotas / n);
+  let previo = +c.monto_base || 0;
+  for (let k = 1; k <= total; k++) {
+    const desde = ymSumar(ini, (k - 1) * n), hastaC = Math.min(k * n, cuotas), hasta = ymSumar(ini, hastaC - 1);
+    const a = k === 1 ? null : aj.filter((x) => x.desde === desde).pop();
+    const monto = k === 1 ? +c.monto_base || 0 : a ? +a.monto : null;
+    out.push({ k, desde, hasta, cuotaDesde: (k - 1) * n + 1, cuotaHasta: hastaC, monto, ajuste: a, previo: k === 1 ? null : previo,
+      estado: desde > hoy ? "futuro" : hasta < hoy ? "pasado" : "actual" });
+    if (monto) previo = monto;
+  }
+  return out;
+}
+function filaPeriodo(x) {
+  const pct = x.monto && x.previo ? Math.round((x.monto / x.previo - 1) * 10000) / 100 : "";
+  const falta = !x.monto && x.estado !== "futuro";
+  return `<tr class="${x.estado === "actual" ? "per-actual" : ""}" data-k="${x.k}">
+    <td><b>Período ${x.k}</b>${x.estado === "actual" ? ' <span class="chip acc">Vigente</span>' : ""}</td>
+    <td class="mono">${x.cuotaDesde === x.cuotaHasta ? x.cuotaDesde : x.cuotaDesde + " a " + x.cuotaHasta}</td>
+    <td>${periodo(x.desde)}${x.desde !== x.hasta ? " a " + periodo(x.hasta) : ""}<div class="muted">Fin: ${fecha(finDeMes(x.hasta))}</div></td>
+    <td>${x.k === 1 ? `<span class="muted">Inicial</span>` : `<input type="number" step="0.01" class="ct-pct" name="pct${x.k}" value="${pct}" placeholder="%" aria-label="Porcentaje de aumento del período ${x.k}">`}</td>
+    <td><input type="number" step="0.01" class="ct-monto" name="monto${x.k}" value="${x.monto ?? ""}" placeholder="${x.k === 1 ? "" : "Sin cargar"}" ${x.k === 1 ? "required" : ""} aria-label="Alquiler del período ${x.k}"></td>
+    <td>${falta ? `<span class="chip bad">Falta cargar</span>` : !x.monto ? `<span class="chip">A calcular</span>` : x.estado === "pasado" ? `<span class="chip ok">Cumplido</span>` : x.estado === "futuro" ? `<span class="chip">Cargado</span>` : ""}</td></tr>`;
+}
+function abrirContrato(id) { S.ct = +id; S.view = "contrato"; cerrarModal(); render(); scrollTo(0, 0); }
+function vContrato() {
+  const c = S.contratos.get(S.ct); if (!c) return `<div class="empty">Contrato no encontrado.</div>`;
+  const pi = P(c.inquilino_id), pp = P(c.propietario_id), cuotas = cuotasDe(c.inicio, c.fin);
+  const nom = (p) => p.nombre + (p.dni ? " · DNI " + p.dni : "");
+  const per = periodosDe(c, c.inicio, cuotas, c.ajuste_meses);
+  const sal = deudaDe(c).reduce((s, x) => s + x.saldo, 0);
+  return `<form id="f-ct" data-id="${c.id}" class="ct">
+  <div class="head"><div><h1>${c.carpeta ? `<span class="muted">Carpeta ${c.carpeta} ·</span> ` : ""}${esc(c.direccion)}</h1>
+    <p>${chipEstado(c)} ${c.renovacion_de ? '<span class="chip">Renovación</span>' : ""} Alquiler actual <b class="mono">${money(montoHoy(c))}</b> · Saldo pendiente <b class="mono" ${sal ? 'style="color:var(--bad)"' : ""}>${money(sal)}</b></p></div>
+    <div class="muted">Fecha de alta ${fecha(String(c.created_at || "").slice(0, 10))}</div></div>
+
+  <section class="panel"><div class="form">
+    <label>Propiedad (dirección)<input type="text" name="direccion" value="${esc(c.direccion)}" required></label>
+    <label>Carpeta<input type="number" name="carpeta" value="${esc(c.carpeta || "")}"></label>
+    <label><span class="lbl">Inquilino <button type="button" class="link" data-persona="${pi.id}">ver datos</button></span><input type="text" name="inquilino" list="dl-inq" value="${esc(nom(pi))}" required></label>
+    <label><span class="lbl">Propietario <button type="button" class="link" data-persona="${pp.id}">ver datos</button></span><input type="text" name="propietario" list="dl-prop" value="${esc(nom(pp))}" required></label>
+    <datalist id="dl-inq">${opcionesPersonas("inquilino")}</datalist><datalist id="dl-prop">${opcionesPersonas("propietario")}</datalist>
+  </div></section>
+
+  <div class="ct-grid">
+    <section class="panel"><h2>Duración del contrato</h2><div class="form uno">
+      <label>Desde<input type="date" name="inicio" id="ct-inicio" value="${esc(c.inicio)}" required></label>
+      <label>Cuotas (meses)<input type="number" min="1" max="120" name="cuotas" id="ct-cuotas" value="${cuotas}" required></label>
+      <label>Hasta<input type="date" id="ct-hasta" value="${esc(c.fin)}" disabled></label>
+    </div></section>
+
+    <section class="panel"><div class="ph"><h2>Montos y períodos de ajuste</h2></div>
+      <div class="form">
+        <label>Índice<select name="indice" id="ct-indice">${INDICES.map(([v, l]) => `<option value="${v}" ${c.indice === v ? "selected" : ""}>${l}</option>`).join("")}${INDICES.some(([v]) => v === c.indice) ? "" : `<option selected>${esc(c.indice)}</option>`}</select></label>
+        <label>Ajusta<select name="ajuste_meses" id="ct-meses">${PERIODICIDAD.map(([v, l]) => `<option value="${v}" ${+c.ajuste_meses === v ? "selected" : ""}>${l} (cada ${v} ${v === 1 ? "mes" : "meses"})</option>`).join("")}${PERIODICIDAD.some(([v]) => v === +c.ajuste_meses) ? "" : `<option value="${c.ajuste_meses}" selected>Cada ${c.ajuste_meses} meses</option>`}</select></label>
+      </div>
+      ${c.ajuste_revisar ? `<div class="banner">La periodicidad vino de SPOT sin confirmar: revisala y guardá.</div>` : ""}
+      <div class="tw"><table class="ct-per"><thead><tr><th>Período</th><th>Cuotas</th><th>Meses</th><th>Aumento %</th><th>Alquiler</th><th></th></tr></thead>
+      <tbody id="ct-periodos">${per.map(filaPeriodo).join("")}</tbody></table></div>
+      <p class="muted">Escribí el % de aumento o el monto nuevo: el otro se calcula solo. Los meses ya cobrados no cambian.</p>
+    </section>
+  </div>
+
+  <section class="panel"><h2>Gestión de cobranza</h2><div class="form tres">
+    <label>Se paga hasta el día<input type="number" min="1" max="28" name="dia_vto" value="${esc(c.dia_vto || "")}" placeholder="${S.cfg.dia_vto} (general)"></label>
+    <label>Honorarios de administración (%)<input type="number" step="0.01" name="comision" value="${esc(c.comision ?? "")}" placeholder="${S.cfg.comision} (general)"></label>
+    <label>Depósito<input type="number" step="0.01" name="deposito" value="${esc(c.deposito || "")}"></label>
+    <label>Forma de pago<select name="forma_pago"><option value="inmobiliaria" ${c.forma_pago === "inmobiliaria" ? "selected" : ""}>Paga en la inmobiliaria</option><option value="dividida" ${c.forma_pago === "dividida" ? "selected" : ""}>Transferencia dividida (propietario + honorarios)</option></select></label>
+    <label class="full">Notas<textarea name="notas" rows="2">${esc(c.notas || "")}</textarea></label>
+  </div>${c.rescindido ? `<div class="banner">Rescindido desde ${periodo(c.rescision_desde)}${c.rescision_motivo ? " · " + esc(c.rescision_motivo) : ""}</div>` : ""}</section>
+
+  <div class="ct-barra">
+    <button type="button" class="btn" data-vista="contratos">Volver</button>
+    <button type="submit" class="btn primary">Guardar cambios</button>
+    <button type="button" class="btn" data-planilla="${c.id}">Cobranza</button>
+    <button type="button" class="btn" data-liqprop="${c.propietario_id}">Liquidación</button>
+    <button type="button" class="btn" data-ficha="${c.id}">Estado de cuenta</button>
+    <button type="button" class="btn" data-renovar="${c.id}">Renovación</button>
+    ${c.rescindido ? `<button type="button" class="btn" data-reactivar="${c.id}">Quitar rescisión</button>` : `<button type="button" class="btn danger" data-rescindir="${c.id}">Rescindir</button>`}
+  </div></form>`;
+}
+// recalcula las filas de períodos cuando cambian inicio, cuotas o periodicidad (conserva lo escrito)
+function ctRefrescar() {
+  const f = $("#f-ct"); if (!f) return; const c = S.contratos.get(+f.dataset.id);
+  const inicio = f.inicio.value, cuotas = +f.cuotas.value; if (!inicio || !cuotas) return;
+  $("#ct-hasta").value = finDesdeCuotas(inicio, cuotas);
+  const escritos = {}; f.querySelectorAll(".ct-monto").forEach((i) => { escritos[i.name] = i.value; });
+  const per = periodosDe(c, inicio, cuotas, f.ajuste_meses.value);
+  $("#ct-periodos").innerHTML = per.map(filaPeriodo).join("");
+  if (+f.ajuste_meses.value === +c.ajuste_meses && inicio === c.inicio) f.querySelectorAll(".ct-monto").forEach((i) => { if (i.name in escritos) i.value = escritos[i.name]; });
+  ctPorcentajes();
+}
+function ctPorcentajes() {                                           // recalcula los % según los montos
+  let prev = null;
+  document.querySelectorAll("#ct-periodos tr").forEach((tr) => {
+    const m = +tr.querySelector(".ct-monto").value || 0, p = tr.querySelector(".ct-pct");
+    if (p && document.activeElement !== p) p.value = m && prev ? Math.round((m / prev - 1) * 10000) / 100 : "";
+    if (m) prev = m;
+  });
+}
+function ctDesdePct(input) {                                         // escribió un %: calcula el monto
+  const tr = input.closest("tr"); let prev = null;
+  for (const t of document.querySelectorAll("#ct-periodos tr")) { if (t === tr) break; const m = +t.querySelector(".ct-monto").value; if (m) prev = m; }
+  if (prev && input.value !== "") tr.querySelector(".ct-monto").value = r2(prev * (1 + +input.value / 100));
+}
+async function guardarContrato(f, v) {
+  const c = S.contratos.get(+f.dataset.id);
+  const inqId = idPersonaDesdeTexto(v.inquilino, "inquilino"), propId = idPersonaDesdeTexto(v.propietario, "propietario");
+  if (!inqId || !propId) { toast("Elegí el inquilino y el propietario de la lista (para uno nuevo usá Inquilinos y propietarios).", "bad"); return; }
+  const fin = finDesdeCuotas(v.inicio, +v.cuotas);
+  const data = { carpeta: +v.carpeta || 0, direccion: v.direccion.trim(), inicio: v.inicio, fin, monto_base: r2(v.monto1), deposito: r2(v.deposito),
+    indice: v.indice, ajuste_meses: +v.ajuste_meses || 12, ajuste_revisar: false, forma_pago: v.forma_pago, comision: v.comision === "" ? null : +v.comision,
+    dia_vto: v.dia_vto ? +v.dia_vto : null, notas: (v.notas || "").trim() || null, inquilino_id: inqId, propietario_id: propId };
+  if (!(data.monto_base > 0)) { toast("Cargá el alquiler del Período 1", "bad"); return; }
+  const { error } = await sb.from("contratos").update(data).eq("id", c.id); if (error) throw error;
+  // ajustes por período: alta, cambio o baja
+  const cAct = { ...c, ...data }, per = periodosDe(cAct, data.inicio, +v.cuotas, data.ajuste_meses);
+  let prev = data.monto_base, cambios = 0;
+  for (const x of per) {
+    if (x.k === 1) continue;
+    const nuevo = v["monto" + x.k] === "" || v["monto" + x.k] == null ? null : r2(v["monto" + x.k]);
+    const pct = nuevo && prev ? Math.round((nuevo / prev - 1) * 10000) / 100 : null;
+    if (x.ajuste && nuevo === null) { const { error: e } = await sb.from("ajustes").update({ anulado: true }).eq("id", x.ajuste.id); if (e) throw e; cambios++; }
+    else if (x.ajuste && nuevo !== +x.ajuste.monto) { const { error: e } = await sb.from("ajustes").update({ monto: nuevo, monto_anterior: prev, pct }).eq("id", x.ajuste.id); if (e) throw e; cambios++; }
+    else if (!x.ajuste && nuevo) { const { error: e } = await sb.from("ajustes").insert({ contrato_id: c.id, desde: x.desde, monto_anterior: prev, monto: nuevo, pct }); if (e) throw e; cambios++; }
+    if (nuevo) prev = nuevo;
+  }
+  await rpc("generar_cargos", { p_contrato: c.id });
+  await recargar("Contrato guardado" + (cambios ? ` · ${cambios} ${cambios === 1 ? "período actualizado" : "períodos actualizados"}` : ""));
+}
+
 /* ================= modales de operaciones ================= */
 function modalCobro(id) {
   const c = S.contratos.get(+id); const d = deudaDe(c); const cur = ymHoy();
@@ -904,6 +1051,7 @@ document.addEventListener("click", async (ev) => {
     if (d.a === "mov-nuevo") { abrirModal(`<div class="mh"><h2>Nuevo movimiento de caja</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-mov"><label>Tipo<select id="mv-tipo" name="tipo"><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option></select></label><label>Fecha<input type="date" id="mv-fecha" name="fecha" value="${S.cajaDia}" required></label><label class="full">Concepto<input type="text" id="mv-concepto" name="concepto" required autofocus></label><label>Monto<input type="number" step="0.01" id="mv-monto" name="monto" required></label><label>Medio<select id="mv-medio" name="medio">${MEDIOS.map((m) => `<option>${m}</option>`).join("")}</select></label><div class="full row"><button class="btn primary" type="submit">Guardar</button></div></form>`); return; }
     if (d.a === "numeracion") { const n = await rpc("ver_numeracion", {}); abrirModal(`<div class="mh"><h2>Numeración</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-num"><label>Próximo recibo<input type="number" min="1" id="nu-rec" name="rec" value="${n?.recibo || 1}"></label><label>Próxima liquidación<input type="number" min="1" id="nu-liq" name="liq" value="${n?.liquidacion || 1}"></label><p class="full muted" style="margin:0">Usalo para continuar la numeración que venían usando en SPOT. No pongas un número ya usado.</p><div class="full row"><button class="btn primary" type="submit">Guardar</button></div></form>`); return; }
     if (d.a === "nuevo-staff") { abrirModal(`<div class="mh"><h2>Sumar persona al equipo</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-staff"><label>Nombre<input type="text" id="st-nombre" name="nombre" required></label><label>Email (será su usuario)<input type="email" id="st-email" name="email" required></label><label>Rol<select id="st-rol" name="rol"><option value="operador">Operador (cobra, aprueba, liquida)</option><option value="admin">Administrador (además configura y gestiona el equipo)</option></select></label><div class="full row"><button class="btn primary" type="submit">Crear usuario</button></div><div class="full" id="st-res"></div></form>`); return; }
+    if (d.contrato) { abrirContrato(d.contrato); return; }
     if (d.ficha) { fichaTab = "cuenta"; await abrirFicha(d.ficha); return; }
     if (d.fichatab) { fichaTab = d.fichatab; await abrirFicha(d.id); return; }
     if (d.persona) { modalPersona(d.persona); return; }
@@ -967,6 +1115,11 @@ document.addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.id === "q") { S.q = t.value; S.limite = 150; const pos = t.selectionStart; render(); const n = $("#q"); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (t.closest("#f-planilla")) { planillaTotal(); return; }
+  if (t.closest("#f-ct")) {
+    if (t.id === "ct-inicio" || t.id === "ct-cuotas" || t.id === "ct-meses") { ctRefrescar(); return; }
+    if (t.classList.contains("ct-pct")) { ctDesdePct(t); return; }
+    if (t.classList.contains("ct-monto")) { ctPorcentajes(); return; }
+  }
   if (t.closest("#f-nuevo")) { nuevoResumen(); return; }
   if (t.closest("#f-liqprop")) { liqPropTotal(); return; }
   if (t.closest("#f-aprobar")) { aprobarTotal(); return; }
@@ -1044,6 +1197,7 @@ document.addEventListener("submit", async (ev) => {
       if (c.ajuste_revisar) await sb.from("contratos").update({ ajuste_revisar: false }).eq("id", c.id);
       cerrarModal(); await recargar("Ajuste guardado: " + money(monto)); return;
     }
+    if (f.id === "f-ct") { await guardarContrato(f, v); return; }
     if (f.id === "f-contrato") {
       const inqId = idPersonaDesdeTexto(v.inquilino, "inquilino"), propId = idPersonaDesdeTexto(v.propietario, "propietario");
       const crear = async (nombre, tipo) => { const { data, error } = await sb.from("personas").insert({ nombre: nombre.trim(), tipo }).select().single(); if (error) throw error; return data.id; };

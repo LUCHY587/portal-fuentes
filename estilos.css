@@ -191,3 +191,20 @@ tr.apagado td{opacity:.45}
 :root:not([data-theme="light"]) .link{text-decoration-color:#b8455a}}
 :root[data-theme="dark"] .seg button[aria-pressed="true"],:root[data-theme="dark"] .segopt:has(input:checked),:root[data-theme="dark"] .chip.acc{background:var(--accent);border-color:var(--accent);color:#fff!important}
 :root[data-theme="dark"] .link{text-decoration-color:#b8455a}
+/* pantalla del contrato (como la carpeta de SPOT) */
+.carpeta{all:unset;cursor:pointer;font-family:var(--f-mono);font-weight:600;color:var(--accent-ink);padding:2px 8px;border-radius:5px;border:1px solid var(--line);background:var(--surface-2);min-width:28px;text-align:center;display:inline-block}
+.carpeta:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.carpeta:focus-visible{outline:2px solid var(--accent-ink)}
+.ct{display:flex;flex-direction:column;gap:16px;padding-bottom:70px}
+.ct h1 .muted{font-weight:500}
+.ct-grid{display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);gap:16px;align-items:start}
+.form.uno{grid-template-columns:minmax(0,1fr)}
+.form.tres{grid-template-columns:repeat(3,minmax(0,1fr))}
+.form label .lbl{display:flex;gap:8px;align-items:baseline}
+.form label .link{font-size:11.5px}
+.ct-per td{vertical-align:middle}
+.ct-per input{max-width:150px}
+.ct-per .ct-pct{max-width:90px}
+.ct-per tr.per-actual td{background:var(--accent-soft)}
+.ct-barra{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;flex-wrap:wrap;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+@media (max-width:900px){.ct-grid{grid-template-columns:minmax(0,1fr)}.form.tres{grid-template-columns:minmax(0,1fr)}}
