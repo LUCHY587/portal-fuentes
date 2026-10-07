@@ -361,7 +361,7 @@ export function pdfLiquidacion(cfg, l, prop) {
       for (const i of g.items) {
         const legado = !i.descripcion, monto = legado ? +i.cobrado || 0 : +i.monto || 0, pun = legado ? 0 : +i.punitorio || 0;
         const adm = +i.comision || 0, total = i.neto != null ? +i.neto : monto + pun - adm;
-        const ds = (legado ? "Alquiler " + periodo(i.periodo) : i.descripcion) + (i.recibo ? " (Rec. " + i.recibo + ")" : "");
+        const ds = (legado ? "Alquiler " + periodo(i.periodo) : i.descripcion);
         renglon(fecha(i.fecha || l.fecha), ds, monto < 0 ? neg(monto) : pm(monto), pm(pun), neg(adm), total < 0 ? neg(total) : pm(total));
         T.monto += monto; T.pun += pun; T.adm += adm; st += total;
       }
