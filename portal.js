@@ -19,7 +19,7 @@ function pantallaLogin(msg) {
     <label>Clave<input type="password" id="lg-clave" name="clave" required autocomplete="current-password"></label>
     ${msg ? `<div class="error" role="alert">${esc(msg)}</div>` : ""}
     <button class="btn primary" type="submit">Ingresar</button>
-    <p class="muted" style="margin:0;font-size:12.5px">¿No tenés clave o la olvidaste? Pedila a la inmobiliaria por WhatsApp.</p>
+    <p class="muted" style="margin:0;font-size:14.5px">¿No tenés clave o la olvidaste? Pedila a la inmobiliaria por WhatsApp.</p>
   </form></div>`;
 }
 async function iniciar() {

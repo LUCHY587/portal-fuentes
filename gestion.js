@@ -5,6 +5,7 @@ import {
   toast, abrirModal, cerrarModal, copiar, mensajeError, wa, rutaArchivo, verArchivo, ETIQUETA_ARCHIVO, ARCHIVOS_OK,
   pdfRecibo, pdfLiquidacion, alternarTema, botonTema,
 } from "./comun.js";
+import { iniciarChat } from "./chat.js";
 
 const $ = (s) => document.querySelector(s);
 const PORTAL_URL = new URL("./", location.href).href;
@@ -557,7 +558,7 @@ function vNuevo() {
       <label class="full">Dirección<input type="text" id="nc-dir" name="direccion" list="dl-dirs" value="${esc(n.direccion || "")}" required placeholder="Ej.: Carlos Gardel 2436 Dto 3"></label>
       <datalist id="dl-dirs">${dirs.map((d) => `<option value="${esc(d)}"></option>`).join("")}</datalist>
       <label>Carpeta<input type="number" id="nc-carpeta" name="carpeta" value="${esc(n.carpeta || "")}"></label>
-      <div class="muted" id="nc-dir-ayuda" style="align-self:end;font-size:12.5px"></div>
+      <div class="muted" id="nc-dir-ayuda" style="align-self:end;font-size:14.5px"></div>
       <h2 class="full">2 · Partes</h2>
       ${persona("propietario", n.propietario_id)}
       ${persona("inquilino", n.inquilino_id)}
@@ -573,7 +574,7 @@ function vNuevo() {
       <label>Índice<select id="nc-indice" name="indice">${Object.keys(AJUSTE_DEF).map((i) => `<option ${n.indice === i ? "selected" : ""}>${i}</option>`).join("")}</select></label>
       <label>Ajusta cada (meses)<input type="number" min="1" max="36" id="nc-ajuste" name="ajuste_meses" value="${esc(n.ajuste_meses)}"></label>
       <label>Honorarios (%)<input type="number" step="0.01" id="nc-comision" name="comision" value="${esc(n.comision)}" placeholder="${S.cfg.comision}"></label>
-      <div class="full"><span class="muted" style="font-size:12px;font-weight:500">Forma de pago</span>
+      <div class="full"><span class="muted" style="font-size:14px;font-weight:500">Forma de pago</span>
         <div class="seg" role="radiogroup">${[["inmobiliaria", "Paga en la inmobiliaria"], ["dividida", "Transferencia dividida"]].map(([v, l]) => `<label class="segopt"><input type="radio" name="forma_pago" value="${v}" ${n.forma_pago === v ? "checked" : ""}> ${l}</label>`).join("")}</div></div>
       <h2 class="full">4 · Conceptos fijos de cada mes</h2>
       <div class="full row">${["TSG", "Aysa", "Expensas Comunes", "Municipal (ABL)"].map((k) => `<button type="button" class="btn small" data-ncconcepto="${k}">+ ${k}</button>`).join("")}<button type="button" class="btn small" data-ncconcepto="">+ Otro</button></div>
@@ -706,6 +707,8 @@ function idPersonaDesdeTexto(txt, tipo) {
 const INDICES = [["ICL", "ICL (Banco Central)"], ["IPC", "IPC"], ["Casa Propia", "Casa Propia"], ["CAC", "CAC"], ["ICC", "ICC"], ["CER", "CER"], ["IS", "IS"],
   ["IPIM", "IPIM"], ["UVA", "UVA"], ["RIPTE", "RIPTE"], ["Fijo", "Valor nominal (sin ajuste)"]];
 const PERIODICIDAD = [[1, "Mensual"], [2, "Bimestral"], [3, "Trimestral"], [4, "Cuatrimestral"], [6, "Semestral"], [12, "Anual"]];
+const MES3 = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const mesCorto = (ym) => MES3[+ym.slice(5, 7) - 1] + " " + ym.slice(0, 4);
 const finDeMes = (ym) => { const [y, m] = ym.split("-").map(Number); return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2, "0"); };
 function cuotasDe(inicio, fin) {                                      // meses entre inicio y fin (24 para 01/11/2025 → 31/10/2027)
   const d = new Date(fin + "T12:00:00"); d.setDate(d.getDate() + 1);
@@ -737,7 +740,7 @@ function filaPeriodo(x) {
   return `<tr class="${x.estado === "actual" ? "per-actual" : ""}" data-k="${x.k}">
     <td><b>Período ${x.k}</b>${x.estado === "actual" ? ' <span class="chip acc">Vigente</span>' : ""}</td>
     <td class="mono">${x.cuotaDesde === x.cuotaHasta ? x.cuotaDesde : x.cuotaDesde + " a " + x.cuotaHasta}</td>
-    <td>${periodo(x.desde)}${x.desde !== x.hasta ? " a " + periodo(x.hasta) : ""}<div class="muted">Fin: ${fecha(finDeMes(x.hasta))}</div></td>
+    <td>${mesCorto(x.desde)}${x.desde !== x.hasta ? " a " + mesCorto(x.hasta) : ""}<div class="muted">Fin: ${fecha(finDeMes(x.hasta))}</div></td>
     <td>${x.k === 1 ? `<span class="muted">Inicial</span>` : `<input type="number" step="0.01" class="ct-pct" name="pct${x.k}" value="${pct}" placeholder="%" aria-label="Porcentaje de aumento del período ${x.k}">`}</td>
     <td><input type="number" step="0.01" class="ct-monto" name="monto${x.k}" value="${x.monto ?? ""}" placeholder="${x.k === 1 ? "" : "Sin cargar"}" ${x.k === 1 ? "required" : ""} aria-label="Alquiler del período ${x.k}"></td>
     <td>${falta ? `<span class="chip bad">Falta cargar</span>` : !x.monto ? `<span class="chip">A calcular</span>` : x.estado === "pasado" ? `<span class="chip ok">Cumplido</span>` : x.estado === "futuro" ? `<span class="chip">Cargado</span>` : ""}</td></tr>`;
@@ -1271,6 +1274,7 @@ async function iniciar() {
   S.yo = yo; render();
   try { await cargarTodo(); } catch (e) { $("#main").innerHTML = `<div class="panel"><h1>No se pudieron cargar los datos</h1><p>${esc(mensajeError(e))}</p></div>`; return; }
   render();
+  iniciarChat(S.yo);
   // Avisos en vivo de nuevos envíos del portal (y control cada 2 minutos por si se corta la conexión)
   sb.channel("envios").on("postgres_changes", { event: "INSERT", schema: "public", table: "envios" }, async () => { await cargarEnvios(); render(); toast("Llegó un nuevo envío del portal"); }).subscribe();
   setInterval(async () => { const antes = pendientesRevisar().length; await cargarEnvios().catch(() => {}); if (pendientesRevisar().length !== antes) render(); }, 120000);
