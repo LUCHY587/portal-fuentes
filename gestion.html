@@ -9,12 +9,14 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Spectral:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="estilos.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>try{var t=localStorage.getItem("tema");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
 <div class="app">
   <aside class="side">
     <div class="brand"><b>M.M. Fuentes</b><span>Gestión de alquileres</span></div>
     <nav id="nav"></nav>
+    <button class="tema" id="tema" data-a="tema"></button>
     <div class="who"><div id="quien"></div><button class="btn ghost small" data-a="salir">Salir</button></div>
   </aside>
   <main id="main"><div class="cargando">Conectando…</div></main>

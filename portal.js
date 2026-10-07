@@ -3,7 +3,7 @@ import {
   sb, DOMINIO_USUARIOS, money, r2, pad5, esc, isoHoy, ymHoy, ymDe, ymSumar, periodo, fecha,
   estadoContrato, contratoActivo, montoEn, comisionDe, deuda, deudaCargos, divisionLineas, division, vtoDe,
   toast, abrirModal, cerrarModal, copiar, mensajeError, rutaArchivo, verArchivo, ETIQUETA_ARCHIVO, ARCHIVOS_OK,
-  pdfRecibo, pdfLiquidacion,
+  pdfRecibo, pdfLiquidacion, alternarTema, temaActual,
 } from "./comun.js";
 
 const $ = (s) => document.querySelector(s);
@@ -65,7 +65,7 @@ function render() {
     .filter((c) => S.anteriores || contratoActivo(c) || (c.rol === "inquilino" && deudaDe(c).length) || (c.rol === "propietario" && ymDe(c.fin) >= ymSumar(ymHoy(), -3)));
   const ocultos = S.contratos.filter((c) => c.rol === S.rol).length - lista.length;
   $("#app").innerHTML = `<header class="phead"><div class="brand"><b>M.M. Fuentes</b><span>Hola${nombre ? ", " + esc(nombre) : ""}</span></div>
-    <div class="row"><button class="btn small" data-a="avisos">Avisos ${sinLeer ? `<span class="badge">${sinLeer}</span>` : ""}</button><button class="btn small" data-a="clave">Cambiar clave</button><button class="btn small ghost" data-a="salir">Salir</button></div></header>
+    <div class="row"><button class="btn small" data-a="avisos">Avisos ${sinLeer ? `<span class="badge">${sinLeer}</span>` : ""}</button><button class="btn small" data-a="clave">Cambiar clave</button><button class="btn small" data-a="tema" title="Cambiar entre modo claro y oscuro">${temaActual() === "dark" ? "Modo claro" : "Modo oscuro"}</button><button class="btn small ghost" data-a="salir">Salir</button></div></header>
   <main class="pmain">
     ${S.esStaff ? `<div class="banner">Estás usando una cuenta del equipo. <a href="gestion.html">Ir al sistema de gestión</a></div>` : ""}
     ${roles.length > 1 ? `<div class="seg">${roles.map((r) => `<button data-rol="${r}" aria-pressed="${S.rol === r}">${r === "inquilino" ? "Como inquilino" : "Como propietario"}</button>`).join("")}</div>` : ""}
@@ -215,6 +215,7 @@ async function enviar(f, tipo) {
 document.addEventListener("click", async (ev) => {
   const el = ev.target.closest("button,a"); if (!el) return; const d = el.dataset;
   try {
+    if (d.a === "tema") { alternarTema(); el.textContent = temaActual() === "dark" ? "Modo claro" : "Modo oscuro"; return; }
     if (d.a === "salir") { await sb.auth.signOut(); location.reload(); return; }
     if (d.a === "anteriores") { S.anteriores = !S.anteriores; render(); return; }
     if (d.rol) { S.rol = d.rol; render(); return; }

@@ -3,7 +3,7 @@ import {
   sb, money, r2, pad5, esc, isoHoy, ymHoy, ymDe, ymSumar, periodo, fecha, diasEntre, MEDIOS,
   estadoContrato, ESTADOS, contratoActivo, ajustesValidos, montoEn, comisionDe, deuda, deudaCargos, divisionLineas, division, proximoAjuste,
   toast, abrirModal, cerrarModal, copiar, mensajeError, wa, rutaArchivo, verArchivo, ETIQUETA_ARCHIVO, ARCHIVOS_OK,
-  pdfRecibo, pdfLiquidacion,
+  pdfRecibo, pdfLiquidacion, alternarTema, botonTema,
 } from "./comun.js";
 
 const $ = (s) => document.querySelector(s);
@@ -13,7 +13,7 @@ const S = {
   cfg: null, yo: null, contratos: new Map(), personas: new Map(), aj: new Map(), pg: new Map(), ov: new Map(),
   liqs: [], envios: [], archEnvio: new Map(), caja: [], staff: [],
   cg: new Map(), cf: new Map(), items: [], adel: [], pagosById: new Map(), pl: null, lp: null, plTab: "planilla",
-  view: "inicio", filtro: "vigentes", orden: "direccion", q: "", limite: 150, cajaMes: ymHoy(), cajaDia: isoHoy(),
+  view: "contratos", filtro: "vigentes", orden: "direccion", q: "", limite: 150, cajaMes: ymHoy(), cajaDia: isoHoy(),
   tipoPersona: "inquilino", cargado: false,
 };
 try { S.orden = localStorage.getItem("orden") || S.orden; } catch {}
@@ -90,7 +90,7 @@ async function rpc(fn, args, ok) {
 }
 
 /* ================= navegación ================= */
-const VISTAS = [["inicio", "Inicio"], ["revisar", "Pagos a revisar"], ["contratos", "Contratos"], ["cobrar", "Cobrar en oficina"], ["morosos", "Morosos"],
+const VISTAS = [["contratos", "Contratos"], ["inicio", "Resumen del mes"], ["revisar", "Pagos a revisar"], ["cobrar", "Cobrar en oficina"], ["morosos", "Morosos"],
   ["ajustes", "Ajustes de precio"], ["liquidaciones", "Liquidaciones"], ["caja", "Caja"], ["personas", "Inquilinos y propietarios"], ["config", "Configuración"]];
 function renderNav() {
   const cs = [...S.contratos.values()];
@@ -100,6 +100,7 @@ function renderNav() {
   const actual = S.view === "planilla" ? "cobrar" : S.view === "liqprop" ? "liquidaciones" : S.view === "nuevo" ? "contratos" : S.view;
   $("#nav").innerHTML = VISTAS.map(([k, l]) => `<button data-vista="${k}" ${actual === k ? 'aria-current="page"' : ""}><span>${l}</span>${n[k] ? `<span class="n">${n[k]}</span>` : ""}</button>`).join("");
   $("#quien").textContent = S.yo ? S.yo.nombre : "";
+  const bt = $("#tema"); if (bt) bt.innerHTML = botonTema();
 }
 function render() {
   renderNav();
@@ -111,6 +112,7 @@ function render() {
   if (S.view === "planilla" && S.plTab === "envios") cargarDocsPlanilla();
   if (S.view === "liqprop") liqPropTotal();
   if (S.view === "nuevo") nuevoResumen();
+  if (S.view === "contratos" && (!document.activeElement || document.activeElement === document.body) && !$("#modal").innerHTML) $("#q")?.focus();
 }
 
 /* ================= vistas ================= */
@@ -178,26 +180,39 @@ function tarjetaEnvio(e) {
     <button class="btn danger" data-rechazar="${e.id}">Rechazar</button> <button class="btn ghost" data-ficha="${c.id}">Ver ficha</button></div></section>`;
 }
 
+const norm = (v) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// busca todas las palabras escritas (sin importar tildes ni mayúsculas) en dirección, carpeta, inquilino, propietario, DNI y teléfono
+function coincide(c, q) {
+  if (!q) return true;
+  const I = P(c.inquilino_id), Pr = P(c.propietario_id);
+  const txt = norm([c.carpeta, c.direccion, inq(c), prop(c), I.dni, I.telefono, Pr.dni, Pr.telefono].join(" "));
+  return norm(q).split(/\s+/).filter(Boolean).every((w) => txt.includes(w));
+}
+function pasaFiltro(c, filtro) {
+  const e = estadoContrato(c);
+  if (filtro === "vigentes") return ["vigente", "porvencer", "futuro"].includes(e);
+  if (filtro === "porvencer") return e === "porvencer";
+  if (filtro === "vencidos") return ["vencido", "rescindido"].includes(e);
+  return true;
+}
 function filtrarContratos() {
-  const q = S.q.trim().toLowerCase();
+  const q = S.q.trim();
   const cmp = S.orden === "vencimiento" ? (a, b) => a.fin.localeCompare(b.fin) || a.direccion.localeCompare(b.direccion, "es", { numeric: true })
     : S.orden === "reciente" ? (a, b) => b.inicio.localeCompare(a.inicio)
     : (a, b) => a.direccion.localeCompare(b.direccion, "es", { numeric: true, sensitivity: "base" });
-  return [...S.contratos.values()].filter((c) => {
-    const e = estadoContrato(c);
-    if (S.filtro === "vigentes" && !["vigente", "porvencer", "futuro"].includes(e)) return false;
-    if (S.filtro === "porvencer" && e !== "porvencer") return false;
-    if (S.filtro === "vencidos" && !["vencido", "rescindido"].includes(e)) return false;
-    return !q || [c.carpeta, c.direccion, inq(c), prop(c), P(c.inquilino_id).telefono, P(c.inquilino_id).dni].join(" ").toLowerCase().includes(q);
-  }).sort(cmp);
+  return [...S.contratos.values()].filter((c) => pasaFiltro(c, S.filtro) && coincide(c, q)).sort(cmp);
 }
 function vContratos() {
   const list = filtrarContratos(), shown = list.slice(0, S.limite);
   const f = (k, l) => `<button data-filtro="${k}" aria-pressed="${S.filtro === k}">${l}</button>`;
   const o = (k, l) => `<button data-orden="${k}" aria-pressed="${S.orden === k}">${l}</button>`;
-  return `<div class="head"><div><h1>Contratos</h1><p>${list.length} resultados</p></div><button class="btn primary" data-a="nuevo-contrato">Nuevo contrato</button></div>
-  <div class="row"><input type="search" id="q" class="search" placeholder="Buscar por dirección, inquilino, propietario, DNI o carpeta" value="${esc(S.q)}">
-  <div class="seg">${f("vigentes", "Vigentes")}${f("porvencer", "Por vencer")}${f("vencidos", "Vencidos y rescindidos")}${f("todos", "Todos")}</div></div>
+  const titulo = { vigentes: "Contratos vigentes", porvencer: "Contratos por vencer", vencidos: "Contratos vencidos y rescindidos", todos: "Todos los contratos" }[S.filtro] || "Contratos";
+  const fuera = S.q.trim() && S.filtro !== "todos" ? [...S.contratos.values()].filter((c) => !pasaFiltro(c, S.filtro) && coincide(c, S.q.trim())).length : 0;
+  return `<div class="head"><div><h1>${titulo}</h1><p>${list.length} ${list.length === 1 ? "contrato" : "contratos"}${S.q.trim() ? " encontrados" : ""}</p></div><button class="btn primary" data-a="nuevo-contrato">Nuevo contrato</button></div>
+  <label class="buscador"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+  <input type="search" id="q" placeholder="Buscar contrato por dirección, inquilino, propietario, DNI o carpeta" value="${esc(S.q)}" aria-label="Buscar contratos" autocomplete="off"></label>
+  ${fuera ? `<div class="buscador-ayuda">También hay ${fuera} ${fuera === 1 ? "coincidencia" : "coincidencias"} en otros estados · <button class="link" data-filtro="todos">Ver todos</button></div>` : ""}
+  <div class="row"><div class="seg">${f("vigentes", "Vigentes")}${f("porvencer", "Por vencer")}${f("vencidos", "Vencidos y rescindidos")}${f("todos", "Todos")}</div></div>
   <div class="row"><span class="muted">Ordenar por</span><div class="seg">${o("direccion", "Dirección (A–Z)")}${o("vencimiento", "Vencimiento (más próximo primero)")}${o("reciente", "Más recientes")}</div></div>
   <div class="tw"><table><thead><tr><th>Carpeta</th><th>Vence</th><th>Dirección</th><th>Cobranza</th><th>Liquidación</th><th class="num">Saldo pendiente</th><th>Estado</th><th></th></tr></thead><tbody>
   ${shown.map((c) => { const dd = deudaDe(c), sal = dd.reduce((s, x) => s + x.saldo, 0), venc = dd.some((x) => x.vencido && !x.enTolerancia);
@@ -208,9 +223,9 @@ function vContratos() {
 }
 
 function vCobrar() {
-  const q = S.q.trim().toLowerCase();
+  const q = S.q.trim();
   const act = [...S.contratos.values()].filter((c) => contratoActivo(c) || deudaDe(c).length);
-  const list = (q ? act.filter((c) => [c.carpeta, c.direccion, inq(c), prop(c)].join(" ").toLowerCase().includes(q)) : act)
+  const list = (q ? act.filter((c) => coincide(c, q)) : act)
     .map((c) => ({ c, d: deudaDe(c) })).sort((a, b) => b.d.length - a.d.length || a.c.direccion.localeCompare(b.c.direccion, "es", { numeric: true })).slice(0, 80);
   return `<div class="head"><div><h1>Cobrar en oficina</h1><p>Para pagos en efectivo o transferencias recibidas por la inmobiliaria.</p></div></div>
   <input type="search" id="q" class="search" placeholder="Inquilino, dirección o carpeta" value="${esc(S.q)}" autofocus>
@@ -879,6 +894,7 @@ document.addEventListener("click", async (ev) => {
     if (d.tipo) { S.tipoPersona = d.tipo; S.limite = 150; render(); return; }
     if (d.a === "mas") { S.limite += 150; render(); return; }
     if (d.a === "refrescar") { await cargarEnvios(); render(); toast("Actualizado"); return; }
+    if (d.a === "tema") { alternarTema(); renderNav(); return; }
     if (d.a === "salir") { await sb.auth.signOut(); location.reload(); return; }
     if (d.a === "nuevo-contrato") { abrirNuevo(); return; }
     if (d.renovar) { abrirRenovacion(d.renovar); return; }

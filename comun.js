@@ -7,6 +7,22 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 export const DOMINIO_USUARIOS = "clientes.inmobiliariammfuentes.com";
 
+/* ---------- modo claro / oscuro ---------- */
+export function temaActual() {
+  const t = document.documentElement.dataset.theme;
+  if (t === "light" || t === "dark") return t;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+export function alternarTema() {
+  const nuevo = temaActual() === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = nuevo;
+  try { localStorage.setItem("tema", nuevo); } catch {}
+  return nuevo;
+}
+const ICONO_SOL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+const ICONO_LUNA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+export const botonTema = () => temaActual() === "dark" ? `${ICONO_SOL}<span>Modo claro</span>` : `${ICONO_LUNA}<span>Modo oscuro</span>`;
+
 /* ---------- formato ---------- */
 export const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 export const MEDIOS = ["Efectivo","Transferencia","Depósito","Cheque","Otro"];
