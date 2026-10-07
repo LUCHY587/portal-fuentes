@@ -26,7 +26,7 @@ async function firmar(paths) {                                          // links
     for (const x of data || []) if (x.signedUrl) C.urls.set(x.path, x.signedUrl);
   }
 }
-function avatar(uid, tam = 34) {
+function avatar(uid, tam = 46) {
   const p = persona(uid), url = p.avatar_path && C.urls.get(p.avatar_path);
   return url ? `<img class="av" src="${esc(url)}" alt="" width="${tam}" height="${tam}" style="width:${tam}px;height:${tam}px">`
     : `<span class="av" style="width:${tam}px;height:${tam}px;background:${colorDe(uid)};font-size:${Math.round(tam * 0.4)}px">${esc(iniciales(p.nombre))}</span>`;
@@ -83,7 +83,7 @@ function armar() {
   eventos();
 }
 function pintarCabecera() {
-  $c("#chat-foto").innerHTML = avatar(C.yo.user_id, 38);
+  $c("#chat-foto").innerHTML = avatar(C.yo.user_id, 50);
   $c("#chat-sub").textContent = C.staff.filter((s) => s.activo).map((s) => s.nombre.split(/[\s,]+/)[0]).join(", ");
 }
 function pintar(bajar = true) {

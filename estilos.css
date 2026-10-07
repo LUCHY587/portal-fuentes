@@ -1,17 +1,17 @@
 /* Layout: sidebar de secciones a la izquierda (arriba en celular), área de trabajo a la derecha con resumen antes que detalle */
 :root{
   --bg:#fbf8f8; --surface:#ffffff; --surface-2:#f5eeef; --line:#e6dadc;
-  --fg:#241a1c; --muted:#6f5f62; --accent:#7a1f2e; --accent-fg:#ffffff; --accent-soft:#f3e3e6; --accent-ink:#7a1f2e;
+  --fg:#241a1c; --muted:#6f5f62; --accent:#7a1f2e; --accent-fg:#ffffff; --accent-soft:#f3e3e6; --accent-ink:#7a1f2e; --input:#ffffff; --input-line:#d9cbcd;
   --ok:#2e6b45; --ok-soft:#e3f1e8; --warn:#9a6212; --warn-soft:#f8ecd8; --bad:#a3262c; --bad-soft:#f8e1e2;
   --f-display:"Spectral", Georgia, serif; --f-body:"Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif; --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#171213; --surface:#211a1b; --surface-2:#2a2123; --line:#3a2e30;
-  --fg:#f1e9ea; --muted:#b3a3a6; --accent:#8e2638; --accent-fg:#ffffff; --accent-soft:#3a2026; --accent-ink:#ecdcde;
+  --bg:#0f0d0e; --surface:#1d191b; --surface-2:#2a2427; --line:#4d4245; --input:#262023; --input-line:#6b5d61;
+  --fg:#faf6f7; --muted:#d0c4c6; --accent:#9b2a3e; --accent-fg:#ffffff; --accent-soft:#45232b; --accent-ink:#f4e4e7;
   --ok:#7cc79a; --ok-soft:#1f3326; --warn:#e5b366; --warn-soft:#3a2d17; --bad:#f08a8f; --bad-soft:#3d1f22; color-scheme:dark }}
 :root[data-theme="dark"]{
-  --bg:#171213; --surface:#211a1b; --surface-2:#2a2123; --line:#3a2e30;
-  --fg:#f1e9ea; --muted:#b3a3a6; --accent:#8e2638; --accent-fg:#ffffff; --accent-soft:#3a2026; --accent-ink:#ecdcde;
+  --bg:#0f0d0e; --surface:#1d191b; --surface-2:#2a2427; --line:#4d4245; --input:#262023; --input-line:#6b5d61;
+  --fg:#faf6f7; --muted:#d0c4c6; --accent:#9b2a3e; --accent-fg:#ffffff; --accent-soft:#45232b; --accent-ink:#f4e4e7;
   --ok:#7cc79a; --ok-soft:#1f3326; --warn:#e5b366; --warn-soft:#3a2d17; --bad:#f08a8f; --bad-soft:#3d1f22; color-scheme:dark }
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.45}
@@ -71,7 +71,7 @@ tbody tr.click:hover td{background:var(--surface-2)}
 .seg{display:flex;gap:4px;flex-wrap:wrap}
 .seg button{cursor:pointer;border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:16px;font-size:15px}
 .seg button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent-ink);color:var(--accent-ink);font-weight:600}
-input[type=text],input[type=search],input[type=number],input[type=date],input[type=month],input[type=tel],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+input[type=text],input[type=search],input[type=number],input[type=date],input[type=month],input[type=tel],input[type=email],input[type=password],select,textarea{background:var(--input);border:1px solid var(--input-line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
 .search{max-width:360px}
 .form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .form label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);font-weight:500;min-width:0}
@@ -234,8 +234,8 @@ body.chat-abierto .chat-fab{display:none}
 .chat-dia span{font-size:12.5px;color:var(--muted);background:var(--surface-2);padding:3px 10px;border-radius:999px;text-transform:capitalize}
 .chat-m{display:flex;gap:10px;align-items:flex-start;margin-top:10px}
 .chat-m.seguido{margin-top:2px}
-.chat-av{width:34px;flex:none}
-.chat-cuerpo{position:relative;min-width:0;max-width:calc(100% - 44px);background:var(--surface);border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:7px 11px}
+.chat-av{width:46px;flex:none}
+.chat-cuerpo{position:relative;min-width:0;max-width:calc(100% - 56px);background:var(--surface);border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:7px 11px}
 .chat-m.mio .chat-cuerpo{background:var(--accent-soft);border-color:transparent}
 .chat-m.seguido .chat-cuerpo{border-radius:12px}
 .chat-quien{display:flex;gap:8px;align-items:baseline;margin-bottom:2px}
@@ -264,3 +264,20 @@ body.chat-abierto .chat-fab{display:none}
 .chat-prev img{width:54px;height:54px;object-fit:cover;border-radius:6px}
 .chat-prev span{flex:1;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:700px){.chat{width:100vw}.chat-fab span:not(.n){display:none}}
+/* modo oscuro: más contraste (bordes visibles, textos más claros) */
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) body{-webkit-font-smoothing:antialiased}
+:root:not([data-theme="light"]) .panel,:root:not([data-theme="light"]) .tw,:root:not([data-theme="light"]) .kpi,:root:not([data-theme="light"]) .side,:root:not([data-theme="light"]) .ct-barra{border-color:rgba(255,255,255,.16)}
+:root:not([data-theme="light"]) th{color:#e6dcde;background:var(--surface-2)}
+:root:not([data-theme="light"]) td{border-color:rgba(255,255,255,.10)}
+:root:not([data-theme="light"]) .btn:not(.ghost){border-color:rgba(255,255,255,.22)}
+:root:not([data-theme="light"]) .btn.primary{border-color:var(--accent)}
+:root:not([data-theme="light"]) .seg button{border-color:rgba(255,255,255,.2)}
+:root:not([data-theme="light"]) .chip:not(.ok):not(.warn):not(.bad):not(.acc){background:#332b2e;color:#e6dcde}}
+:root[data-theme="dark"] body{-webkit-font-smoothing:antialiased}
+:root[data-theme="dark"] .panel,:root[data-theme="dark"] .tw,:root[data-theme="dark"] .kpi,:root[data-theme="dark"] .side,:root[data-theme="dark"] .ct-barra{border-color:rgba(255,255,255,.16)}
+:root[data-theme="dark"] th{color:#e6dcde;background:var(--surface-2)}
+:root[data-theme="dark"] td{border-color:rgba(255,255,255,.10)}
+:root[data-theme="dark"] .btn:not(.ghost){border-color:rgba(255,255,255,.22)}
+:root[data-theme="dark"] .btn.primary{border-color:var(--accent)}
+:root[data-theme="dark"] .seg button{border-color:rgba(255,255,255,.2)}
+:root[data-theme="dark"] .chip:not(.ok):not(.warn):not(.bad):not(.acc){background:#332b2e;color:#e6dcde}
