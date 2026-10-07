@@ -8,6 +8,11 @@ import {
 import { iniciarChat } from "./chat.js";
 
 const $ = (s) => document.querySelector(s);
+// usuarios del equipo sin email: "lucia" se guarda como lucia@equipo.inmobiliariammfuentes.com
+const DOMINIO_EQUIPO = "equipo.inmobiliariammfuentes.com";
+const emailDeUsuario = (u) => { u = String(u || "").trim().toLowerCase(); if (u.includes("@")) return u;
+  return u.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "") + "@" + DOMINIO_EQUIPO; };
+const usuarioDe = (email) => String(email || "").endsWith("@" + DOMINIO_EQUIPO) ? email.split("@")[0] : String(email || "");
 const PORTAL_URL = new URL("./", location.href).href;
 
 const S = {
@@ -340,7 +345,7 @@ function vConfig() {
   </form>
   <section class="panel"><div class="ph"><h2>Numeración</h2>${puedeAdmin() ? `<button class="btn small" data-a="numeracion">Cambiar</button>` : ""}</div><div id="numeracion" class="muted">Consultando…</div></section>
   <section class="panel"><div class="ph"><h2>Equipo</h2>${puedeAdmin() ? `<button class="btn small primary" data-a="nuevo-staff">Sumar persona</button>` : ""}</div>
-  <div class="tw"><table><tbody>${S.staff.map((s) => `<tr><td>${esc(s.nombre)}<div class="muted">${esc(s.email || "")}</div></td><td>${s.rol === "admin" ? "Administrador" : "Operador"}</td><td>${s.activo ? `<span class="chip ok">Activo</span>` : `<span class="chip">Inactivo</span>`}</td><td class="num">${puedeAdmin() && s.user_id !== S.yo.user_id ? `<button class="btn small" data-staffclave="${s.user_id}">Nueva clave</button> <button class="btn small" data-staffactivo="${s.user_id}">${s.activo ? "Desactivar" : "Activar"}</button>` : ""}</td></tr>`).join("")}</tbody></table></div></section>`;
+  <div class="tw"><table><tbody>${S.staff.map((s) => `<tr><td>${esc(s.nombre)}<div class="muted">Usuario: ${esc(usuarioDe(s.email))}</div></td><td>${s.rol === "admin" ? "Administrador" : "Operador"}</td><td>${s.activo ? `<span class="chip ok">Activo</span>` : `<span class="chip">Inactivo</span>`}</td><td class="num">${puedeAdmin() && s.user_id !== S.yo.user_id ? `<button class="btn small" data-staffclave="${s.user_id}">Nueva clave</button> <button class="btn small" data-staffactivo="${s.user_id}">${s.activo ? "Desactivar" : "Activar"}</button>` : ""}</td></tr>`).join("")}</tbody></table></div></section>`;
 }
 
 
@@ -1045,6 +1050,9 @@ document.addEventListener("click", async (ev) => {
     if (d.a === "mas") { S.limite += 150; render(); return; }
     if (d.a === "refrescar") { await cargarEnvios(); render(); toast("Actualizado"); return; }
     if (d.a === "tema") { alternarTema(); renderNav(); return; }
+    if (d.a === "mi-clave") { abrirModal(`<div class="mh"><h2>Cambiar mi clave</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
+      <form class="form" id="f-miclave"><label>Clave nueva<input type="password" name="c1" minlength="6" required autocomplete="new-password"></label><label>Repetir clave nueva<input type="password" name="c2" minlength="6" required autocomplete="new-password"></label>
+      <div class="full row"><button class="btn primary" type="submit">Guardar clave</button><button class="btn" type="button" data-cerrar>Cancelar</button></div></form>`); return; }
     if (d.a === "salir") { await sb.auth.signOut(); location.reload(); return; }
     if (d.a === "nuevo-contrato") { abrirNuevo(); return; }
     if (d.renovar) { abrirRenovacion(d.renovar); return; }
@@ -1053,7 +1061,7 @@ document.addEventListener("click", async (ev) => {
     if (d.a === "nueva-persona") { modalPersona(null); return; }
     if (d.a === "mov-nuevo") { abrirModal(`<div class="mh"><h2>Nuevo movimiento de caja</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-mov"><label>Tipo<select id="mv-tipo" name="tipo"><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option></select></label><label>Fecha<input type="date" id="mv-fecha" name="fecha" value="${S.cajaDia}" required></label><label class="full">Concepto<input type="text" id="mv-concepto" name="concepto" required autofocus></label><label>Monto<input type="number" step="0.01" id="mv-monto" name="monto" required></label><label>Medio<select id="mv-medio" name="medio">${MEDIOS.map((m) => `<option>${m}</option>`).join("")}</select></label><div class="full row"><button class="btn primary" type="submit">Guardar</button></div></form>`); return; }
     if (d.a === "numeracion") { const n = await rpc("ver_numeracion", {}); abrirModal(`<div class="mh"><h2>Numeración</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-num"><label>Próximo recibo<input type="number" min="1" id="nu-rec" name="rec" value="${n?.recibo || 1}"></label><label>Próxima liquidación<input type="number" min="1" id="nu-liq" name="liq" value="${n?.liquidacion || 1}"></label><p class="full muted" style="margin:0">Usalo para continuar la numeración que venían usando en SPOT. No pongas un número ya usado.</p><div class="full row"><button class="btn primary" type="submit">Guardar</button></div></form>`); return; }
-    if (d.a === "nuevo-staff") { abrirModal(`<div class="mh"><h2>Sumar persona al equipo</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-staff"><label>Nombre<input type="text" id="st-nombre" name="nombre" required></label><label>Email (será su usuario)<input type="email" id="st-email" name="email" required></label><label>Rol<select id="st-rol" name="rol"><option value="operador">Operador (cobra, aprueba, liquida)</option><option value="admin">Administrador (además configura y gestiona el equipo)</option></select></label><div class="full row"><button class="btn primary" type="submit">Crear usuario</button></div><div class="full" id="st-res"></div></form>`); return; }
+    if (d.a === "nuevo-staff") { abrirModal(`<div class="mh"><h2>Sumar persona al equipo</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><form class="form" id="f-staff"><label>Nombre<input type="text" id="st-nombre" name="nombre" required></label><label>Usuario<input type="text" id="st-email" name="email" required autocomplete="off" autocapitalize="none" placeholder="Ej.: lucia (sin espacios)"><span class="muted">No hace falta email. Si prefieren, pueden poner un email.</span></label><label>Rol<select id="st-rol" name="rol"><option value="operador">Operador (cobra, aprueba, liquida)</option><option value="admin">Administrador (además configura y gestiona el equipo)</option></select></label><div class="full row"><button class="btn primary" type="submit">Crear usuario</button></div><div class="full" id="st-res"></div></form>`); return; }
     if (d.contrato) { abrirContrato(d.contrato); return; }
     if (d.ficha) { fichaTab = "cuenta"; await abrirFicha(d.ficha); return; }
     if (d.fichatab) { fichaTab = d.fichatab; await abrirFicha(d.id); return; }
@@ -1236,10 +1244,15 @@ document.addEventListener("submit", async (ev) => {
       const { error } = await sb.from("config").update(data).eq("id", 1); if (error) throw error; await recargar("Configuración guardada"); return;
     }
     if (f.id === "f-num") { if (await rpc("fijar_numeracion", { p_proximo_recibo: +v.rec, p_proxima_liquidacion: +v.liq }, "Numeración actualizada")) { cerrarModal(); mostrarNumeracion(); } return; }
+    if (f.id === "f-miclave") {
+      if (v.c1 !== v.c2) { toast("Las dos claves no coinciden", "bad"); return; }
+      const { error } = await sb.auth.updateUser({ password: v.c1 }); if (error) throw error;
+      cerrarModal(); toast("Clave cambiada"); return;
+    }
     if (f.id === "f-staff") {
-      const { data, error } = await sb.functions.invoke("accesos", { body: { accion: "crear_staff", ...v } });
+      const { data, error } = await sb.functions.invoke("accesos", { body: { accion: "crear_staff", ...v, email: emailDeUsuario(v.email) } });
       if (error || data?.error) throw new Error(data?.error || error.message);
-      $("#st-res").innerHTML = `<div class="recibo">Usuario: <b>${esc(data.email)}</b> · Clave: <b class="mono">${esc(data.clave)}</b><div class="muted">Entra en ${esc(location.href)}. La clave no se vuelve a mostrar.</div></div>`;
+      $("#st-res").innerHTML = `<div class="recibo">Usuario: <b>${esc(usuarioDe(data.email))}</b> · Clave: <b class="mono">${esc(data.clave)}</b><div class="muted">Entra en ${esc(location.href)}. La clave no se vuelve a mostrar.</div></div>`;
       cargarTodo().then(render); return;
     }
   } catch (e) { toast(mensajeError(e), "bad"); }
@@ -1256,14 +1269,14 @@ async function mostrarNumeracion() { const n = await rpc("ver_numeracion", {}); 
 /* ================= sesión ================= */
 function pantallaLogin(msg) {
   document.body.innerHTML = `<div class="login"><form class="card" id="f-login"><div class="brand"><b>M.M. Fuentes</b><span>Sistema de gestión</span></div>
-  <label>Email<input type="email" id="lg-email" name="email" required autocomplete="username"></label>
+  <label>Usuario o email<input type="text" id="lg-email" name="email" required autocomplete="username" autocapitalize="none"></label>
   <label>Clave<input type="password" id="lg-clave" name="clave" required autocomplete="current-password"></label>
   ${msg ? `<div class="error">${esc(msg)}</div>` : ""}<button class="btn primary" type="submit">Ingresar</button>
   <a class="muted" href="./">¿Sos inquilino o propietario? Entrá al portal</a></form></div><div id="modal"></div>`;
 }
 async function login(v) {
-  const { error } = await sb.auth.signInWithPassword({ email: v.email.trim(), password: v.clave });
-  if (error) { pantallaLogin("Email o clave incorrectos."); return; }
+  const { error } = await sb.auth.signInWithPassword({ email: emailDeUsuario(v.email), password: v.clave });
+  if (error) { pantallaLogin("Usuario o clave incorrectos."); return; }
   location.reload();
 }
 async function iniciar() {
