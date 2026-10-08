@@ -298,3 +298,13 @@ body.chat-abierto .chat-fab{display:none}
 .cp-pie{font-size:14px;text-align:center}
 .cp-pie a{color:var(--accent-ink)}
 @media (max-width:600px){.cp .dl{grid-template-columns:minmax(0,1fr)}.cp-total{align-items:flex-start}.cp-btns .btn{flex:1}}
+/* logo de la inmobiliaria */
+.logo{display:block;width:110px;height:auto;margin:0 0 10px}
+.logo-grande{width:150px;margin:0 auto 12px}
+.logo-chico{width:52px;margin:0}
+.brand-fila{display:flex;align-items:center;gap:12px}
+.login .brand{text-align:center}
+.login .brand b,.login .brand span{display:block}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .logo{background:#f6f1f2;border-radius:12px;padding:6px 8px}}
+:root[data-theme="dark"] .logo{background:#f6f1f2;border-radius:12px;padding:6px 8px}
+@media (max-width:720px){.side .logo{width:52px;margin:0 10px 0 0;float:left}}

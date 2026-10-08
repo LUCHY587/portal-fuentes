@@ -5,6 +5,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: "cobranza-fuentes" },
 });
+export const LOGO_URL = new URL("logo.png", import.meta.url).href;
 export const DOMINIO_USUARIOS = "clientes.inmobiliariammfuentes.com";
 
 /* ---------- modo claro / oscuro ---------- */
