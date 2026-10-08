@@ -3,7 +3,7 @@ import {
   sb, money, r2, pad5, esc, isoHoy, ymHoy, ymDe, ymSumar, periodo, fecha, diasEntre, MEDIOS,
   estadoContrato, ESTADOS, contratoActivo, ajustesValidos, montoEn, comisionDe, deuda, deudaCargos, divisionLineas, division, proximoAjuste,
   toast, abrirModal, cerrarModal, copiar, mensajeError, wa, rutaArchivo, verArchivo, ETIQUETA_ARCHIVO, ARCHIVOS_OK,
-  pdfRecibo, pdfLiquidacion, alternarTema, botonTema,
+  pdfRecibo, pdfLiquidacion, alternarTema, botonTema, LOGO_URL,
 } from "./comun.js";
 import { iniciarChat } from "./chat.js";
 
@@ -1290,7 +1290,7 @@ async function mostrarNumeracion() { const n = await rpc("ver_numeracion", {}); 
 
 /* ================= sesión ================= */
 function pantallaLogin(msg) {
-  document.body.innerHTML = `<div class="login"><form class="card" id="f-login"><div class="brand"><b>M.M. Fuentes</b><span>Sistema de gestión</span></div>
+  document.body.innerHTML = `<div class="login"><form class="card" id="f-login"><div class="brand"><img class="logo logo-grande" src="${LOGO_URL}" alt="Logo de Inmobiliaria M.M. Fuentes"><b>M.M. Fuentes</b><span>Sistema de gestión</span></div>
   <label>Usuario o email<input type="text" id="lg-email" name="email" required autocomplete="username" autocapitalize="none"></label>
   <label>Clave<input type="password" id="lg-clave" name="clave" required autocomplete="current-password"></label>
   ${msg ? `<div class="error">${esc(msg)}</div>` : ""}<button class="btn primary" type="submit">Ingresar</button>

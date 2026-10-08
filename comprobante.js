@@ -1,12 +1,12 @@
 // Cobranza Fuentes · Página pública de un comprobante (se abre con el link que manda la inmobiliaria)
-import { sb, money, esc, fecha, periodo, pdfRecibo, pdfLiquidacion } from "./comun.js";
+import { sb, money, esc, fecha, periodo, pdfRecibo, pdfLiquidacion, LOGO_URL } from "./comun.js";
 
 const $ = (s) => document.querySelector(s);
 const token = new URLSearchParams(location.search).get("c") || "";
 
 function marco(cfg, cuerpo) {
   const contacto = [cfg.whatsapp ? "WhatsApp " + cfg.whatsapp : "", cfg.telefono ? "Tel. " + cfg.telefono : "", cfg.email].filter(Boolean).join(" · ");
-  return `<header class="cp-h"><div class="brand"><b>${esc(cfg.nombre || "M.M. Fuentes")}</b><span>${esc(contacto)}</span></div></header>${cuerpo}
+  return `<header class="cp-h"><div class="brand brand-fila"><img class="logo logo-chico" src="${LOGO_URL}" alt="Logo de Inmobiliaria M.M. Fuentes"><div><b>${esc(cfg.nombre || "M.M. Fuentes")}</b><span>${esc(contacto)}</span></div></div></header>${cuerpo}
   <p class="cp-pie muted">Este link es personal: guardalo y podés volver a abrir el comprobante cuando quieras, sin descargar nada.
   ¿Sos inquilino o propietario? También tenés todos tus comprobantes en el <a href="./">portal de clientes</a>.</p>`;
 }

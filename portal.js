@@ -1,6 +1,6 @@
 // Cobranza Fuentes · Portal de inquilinos y propietarios
 import {
-  sb, DOMINIO_USUARIOS, money, r2, pad5, esc, isoHoy, ymHoy, ymDe, ymSumar, periodo, fecha,
+  sb, DOMINIO_USUARIOS, LOGO_URL, money, r2, pad5, esc, isoHoy, ymHoy, ymDe, ymSumar, periodo, fecha,
   estadoContrato, contratoActivo, montoEn, comisionDe, deuda, deudaCargos, divisionLineas, division, vtoDe,
   toast, abrirModal, cerrarModal, copiar, mensajeError, rutaArchivo, verArchivo, ETIQUETA_ARCHIVO, ARCHIVOS_OK,
   pdfRecibo, pdfLiquidacion, alternarTema, temaActual,
@@ -13,7 +13,7 @@ const MAX_MB = 10;
 /* ---------- sesión ---------- */
 function pantallaLogin(msg) {
   $("#app").innerHTML = `<div class="login"><form class="card" id="f-login">
-    <div class="brand"><b>M.M. Fuentes</b><span>Portal de inquilinos y propietarios</span></div>
+    <div class="brand"><img class="logo logo-grande" src="${LOGO_URL}" alt="Logo de Inmobiliaria M.M. Fuentes"><b>M.M. Fuentes</b><span>Portal de inquilinos y propietarios</span></div>
     <p class="muted" style="margin:0">Consultá cuánto pagar, enviá tus comprobantes y descargá recibos y liquidaciones.</p>
     <label>DNI<input type="text" inputmode="numeric" id="lg-dni" name="dni" required autocomplete="username" placeholder="Sin puntos"></label>
     <label>Clave<input type="password" id="lg-clave" name="clave" required autocomplete="current-password"></label>
@@ -64,7 +64,7 @@ function render() {
   const lista = S.contratos.filter((c) => c.rol === S.rol).map(contratoKey)
     .filter((c) => S.anteriores || contratoActivo(c) || (c.rol === "inquilino" && deudaDe(c).length) || (c.rol === "propietario" && ymDe(c.fin) >= ymSumar(ymHoy(), -3)));
   const ocultos = S.contratos.filter((c) => c.rol === S.rol).length - lista.length;
-  $("#app").innerHTML = `<header class="phead"><div class="brand"><b>M.M. Fuentes</b><span>Hola${nombre ? ", " + esc(nombre) : ""}</span></div>
+  $("#app").innerHTML = `<header class="phead"><div class="brand brand-fila"><img class="logo logo-chico" src="${LOGO_URL}" alt=""><div><b>M.M. Fuentes</b><span>Hola${nombre ? ", " + esc(nombre) : ""}</span></div></div>
     <div class="row"><button class="btn small" data-a="avisos">Avisos ${sinLeer ? `<span class="badge">${sinLeer}</span>` : ""}</button><button class="btn small" data-a="clave">Cambiar clave</button><button class="btn small" data-a="tema" title="Cambiar entre modo claro y oscuro">${temaActual() === "dark" ? "Modo claro" : "Modo oscuro"}</button><button class="btn small ghost" data-a="salir">Salir</button></div></header>
   <main class="pmain">
     ${S.esStaff ? `<div class="banner">Estás usando una cuenta del equipo. <a href="gestion.html">Ir al sistema de gestión</a></div>` : ""}
