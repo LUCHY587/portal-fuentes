@@ -29,7 +29,7 @@ function msgLiq(l) {
 function botonesLinkLiq(l) {
   if (!l.token) return "";
   const pr = P(l.propietario_id);
-  return `<button class="btn" data-copiarlink="${esc(linkComprobante(l.token))}">Copiar link</button><a class="btn" href="${esc(waMensaje(pr.telefono, msgLiq(l)))}" target="_blank" rel="noopener">Enviar link por WhatsApp${pr.telefono ? "" : " (elegir contacto)"}</a>`;
+  return `<button class="btn" data-copiarliq="${l.id}">Copiar mensaje con link</button><a class="btn" href="${esc(waMensaje(pr.telefono, msgLiq(l)))}" target="_blank" rel="noopener">Enviar link por WhatsApp${pr.telefono ? "" : " (elegir contacto)"}</a>`;
 }
 
 const S = {
@@ -978,7 +978,7 @@ function modalRecibo(pid) {
   <p>Recibimos de <b>${esc(i.nombre)}</b> la suma de <b>${money(p.total)}</b> en concepto de alquiler del período <b>${periodo(p.periodo)}</b> de <b>${esc(c.direccion)}</b>.</p>
   <div class="tw"><table><tbody>${Array.isArray(p.detalle) && p.detalle.length ? "" : `<tr><td>Alquiler</td><td class="num">${money(p.alquiler)}</td></tr>${+p.punitorio ? `<tr><td>Punitorios</td><td class="num">${money(p.punitorio)}</td></tr>` : ""}`}${filasConceptos(p)}<tr><td><b>Total</b> · ${esc(p.medio)}</td><td class="num"><b>${money(p.total)}</b></td></tr></tbody></table></div>
   ${p.anulado ? `<span class="chip bad">Anulado</span>` : ""}</div>
-  <div class="row">${p.token ? `<a class="btn primary" href="${esc(waMensaje(i.telefono, msgRecibo(p, c)))}" target="_blank" rel="noopener">Enviar link por WhatsApp${i.telefono ? "" : " (elegir contacto)"}</a><button class="btn" data-copiarlink="${esc(linkComprobante(p.token))}">Copiar link</button>` : ""}<button class="btn" data-recibopdf="${p.id}">Descargar PDF</button></div>
+  <div class="row">${p.token ? `<a class="btn primary" href="${esc(waMensaje(i.telefono, msgRecibo(p, c)))}" target="_blank" rel="noopener">Enviar link por WhatsApp${i.telefono ? "" : " (elegir contacto)"}</a><button class="btn" data-recibotxt="${p.id}">Copiar mensaje con link</button>` : ""}<button class="btn" data-recibopdf="${p.id}">Descargar PDF</button></div>
   <p class="muted" style="margin:0">Con el link, el inquilino ve y descarga el recibo cuando quiera, sin cuenta y sin que ustedes tengan que mandar archivos. ${p.token ? `<button class="link" data-abrirlink="${esc(linkComprobante(p.token))}">Ver cómo lo ve el inquilino</button>` : ""}</p>`);
 }
 function filasConceptos(p) {
@@ -1107,6 +1107,7 @@ document.addEventListener("click", async (ev) => {
     if (d.recibopdf) { const { p, c } = buscarPago(d.recibopdf); const r = pdfRecibo(S.cfg, { direccion: c.direccion, inquilino: inq(c), carpeta: c.carpeta, propietario: P(c.propietario_id).nombre, propietario_doc: P(c.propietario_id).dni }, p); r.doc.save(r.nombre); return; }
     if (d.recibotxt) { const { p, c } = buscarPago(d.recibotxt); copiar(msgRecibo(p, c)); return; }
     if (d.copiarlink) { copiar(d.copiarlink); return; }
+    if (d.copiarliq) { const l = S.liqs.find((x) => x.id === +d.copiarliq) || S.ultLiq; if (l) copiar(msgLiq(l)); return; }
     if (d.abrirlink) { window.open(d.abrirlink, "_blank", "noopener"); return; }
     if (d.liqlink) { const l = S.liqs.find((x) => x.id === +d.liqlink); abrirModal(`<div class="mh"><div><h2>Liquidación N° ${l.nro}</h2><div class="muted">${esc(P(l.propietario_id).nombre)} · ${money(l.neto)}</div></div><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
       <p>Mandale al propietario este link: ve y descarga la liquidación cuando quiera, sin cuenta.</p><div class="row">${botonesLinkLiq(l)}<button class="btn" data-abrirlink="${esc(linkComprobante(l.token))}">Ver cómo lo ve</button></div>`); return; }

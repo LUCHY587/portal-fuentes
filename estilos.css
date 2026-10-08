@@ -100,10 +100,14 @@ input[type=text],input[type=search],input[type=number],input[type=date],input[ty
 @media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:minmax(0,1fr)}.dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:720px){
   .app{grid-template-columns:minmax(0,1fr)}
-  .side{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);padding:12px 16px;gap:10px}
-  nav{flex-direction:row;overflow-x:auto}
+  .side{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);padding:12px 16px;gap:8px 10px;flex-direction:row;flex-wrap:wrap;align-items:center}
+  .side .brand{flex:1 1 auto;padding:0}
+  .side .tema{order:2;padding:6px 8px}
+  .side .tema span{display:none}
+  .side .who{display:flex;flex-direction:row;align-items:center;gap:2px;margin:0;padding:6px 0 0;order:3;flex-basis:100%;border-top:1px solid var(--line)}
+  .side .who #quien{font-weight:600;color:var(--fg);margin-right:auto;font-size:14.5px}
+  nav{flex-direction:row;overflow-x:auto;order:4;flex-basis:100%}
   nav button{white-space:nowrap}
-  .side .who{display:none}
   main{padding-inline:16px}
   .form{grid-template-columns:minmax(0,1fr)}
   .overlay{padding:16px}
