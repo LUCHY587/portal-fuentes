@@ -6,6 +6,7 @@ import {
   pdfRecibo, pdfLiquidacion, alternarTema, botonTema, LOGO_URL,
 } from "./comun.js";
 import { iniciarChat } from "./chat.js";
+import { leerTextoWord, detectarDatos, claveDireccion } from "./contrato-word.js";
 
 const $ = (s) => document.querySelector(s);
 // usuarios del equipo sin email: "lucia" se guarda como lucia@equipo.inmobiliariammfuentes.com
@@ -540,6 +541,7 @@ function abrirNuevo(pref) {
   const maxCarp = Math.max(0, ...[...S.contratos.values()].map((c) => +c.carpeta || 0));
   S.nc = Object.assign({ inicio: ini, duracion: 24, indice: "IPC", ajuste_meses: 3, forma_pago: "inmobiliaria", comision: "", dia_vto: "", carpeta: maxCarp + 1, conceptos: [] }, pref || {});
   if (!S.nc.fin) S.nc.fin = isoMas(S.nc.inicio, +S.nc.duracion, -1);
+  S.ncArchivo = null;
   S.view = "nuevo"; cerrarModal(); render(); scrollTo(0, 0); setTimeout(() => $("#nc-dir")?.focus(), 50);
 }
 function abrirRenovacion(cid) {
@@ -574,6 +576,7 @@ function vNuevo() {
     </div>`; };
   return `<div class="head"><div><h1>${ren ? "Renovar contrato" : "Nuevo contrato"}</h1><p>${ren ? `Renovación de ${esc(ren.direccion)} (vence el ${fecha(ren.fin)}). Revisá el nuevo alquiler y las fechas.` : "Completá de arriba hacia abajo. Con Ctrl + Enter se guarda."}</p></div>
     <div class="row"><button class="btn" data-vista="contratos">Cancelar</button></div></div>
+  ${panelWord(n)}
   <form id="f-nuevo" class="nuevo-grid" autocomplete="off">
     <section class="panel form">
       <h2 class="full">1 · Propiedad</h2>
@@ -647,7 +650,94 @@ async function guardarNuevo(f, modo) {
   const id = await rpc("crear_contrato", { p }, S.nc.renovacion_de ? "Renovación guardada" : "Contrato guardado");
   if (!id) return;
   await cargarTodo();
+  if (S.ncArchivo) { await guardarArchivoContrato(id); await cargarTodo(); }
   if (modo === "otro") abrirNuevo(); else { S.view = "contratos"; render(); fichaTab = "cuenta"; await abrirFicha(id); }
+}
+/* ================= cargar contrato desde el Word ================= */
+function panelWord(n) {
+  const w = n.word;
+  return `<section class="panel nc-word">
+    <div class="ph"><div><h2>Cargar desde el contrato en Word</h2><p class="muted" style="margin:4px 0 0">Subí el .doc o .docx del contrato y completamos solos las partes, la dirección, fechas, precio, depósito, índice y cada cuánto ajusta. Después revisás y guardás.</p></div>
+    <label class="btn primary nc-word-btn">${w ? "Elegir otro archivo" : "Elegir archivo Word"}<input type="file" id="nc-word" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div>
+    ${w ? `<div class="nc-word-res"><div class="muted">📄 ${esc(w.archivo)}</div><ul>${w.items.map(([l, v, ok]) => `<li class="${ok ? "ok" : "falta"}"><span>${ok ? "✓" : "!"}</span><b>${esc(l)}:</b> ${ok ? esc(v) : `<span class="muted">${esc(v || "no lo encontré, completalo a mano")}</span>`}</li>`).join("")}</ul>
+      ${w.notas.length ? `<div class="banner">${w.notas.map(esc).join("<br>")}</div>` : ""}
+      <p class="muted" style="margin:0">El archivo del contrato se guarda junto al contrato cuando lo confirmes.</p></div>` : ""}
+  </section>`;
+}
+const claveNombre = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z ]+/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+function buscarPersona(tipo, x) {
+  if (!x) return null;
+  const todos = [...S.personas.values()];
+  if (x.dni) { const p = todos.find((q) => q.dni && q.dni.replace(/\D/g, "") === x.dni && q.tipo === tipo) || todos.find((q) => q.dni && q.dni.replace(/\D/g, "") === x.dni); if (p) return p; }
+  const k = claveNombre(x.nombre);
+  return todos.find((q) => q.tipo === tipo && claveNombre(q.nombre) === k) || null;
+}
+async function aplicarWord(file) {
+  let d;
+  try { toast("Leyendo el contrato…"); d = detectarDatos(await leerTextoWord(file)); }
+  catch (e) { toast("No se pudo leer el archivo: " + mensajeError(e), "bad"); return; }
+  if (!d.monto_base && !d.inicio && !d.propietario && !d.direccion) { toast("No encontré datos en ese archivo. ¿Es un contrato de alquiler en Word?", "bad"); return; }
+  const n = { ...S.nc, conceptos: S.nc.conceptos || [] }; const items = [];
+  // propiedad: si ya existe en el sistema, se usa esa dirección (y su carpeta y conceptos)
+  const prev = d.direccion ? [...S.contratos.values()].filter((c) => claveDireccion(c.direccion) === claveDireccion(d.direccion)).sort((a, b) => b.inicio.localeCompare(a.inicio))[0] : null;
+  if (prev) {
+    Object.assign(n, { direccion: prev.direccion, carpeta: prev.carpeta || n.carpeta, forma_pago: prev.forma_pago, comision: prev.comision ?? "",
+      conceptos: n.conceptos.length ? n.conceptos : (S.cf.get(prev.id) || []).filter((k) => k.activo).map((k) => ({ nombre: k.nombre, monto: k.monto, porcentaje: k.porcentaje, admin: k.admin, propietario: k.propietario })) });
+    if (d.renovacion || prev.inquilino_id === buscarPersona("inquilino", d.inquilino)?.id) n.renovacion_de = prev.id;
+    items.push(["Propiedad", `${prev.direccion} (ya estaba en el sistema, carpeta ${prev.carpeta || "—"})`, true]);
+  } else if (d.direccion) { n.direccion = d.direccion; items.push(["Propiedad", d.direccion + " (nueva)", true]); }
+  else items.push(["Propiedad", "", false]);
+  // partes
+  for (const [tipo, et] of [["propietario", "Propietario (locador)"], ["inquilino", "Inquilino (locatario)"]]) {
+    const x = d[tipo]; delete n[tipo + "_id"]; delete n[tipo + "_txt"];
+    if (!x) { items.push([et, "", false]); continue; }
+    const p = buscarPersona(tipo, x);
+    if (p) { n[tipo + "_id"] = p.id; items.push([et, `${p.nombre}${x.dni ? " · DNI " + x.dni : ""} (ya estaba cargado)`, true]); }
+    else { Object.assign(n, { [tipo + "_txt"]: x.nombre, [tipo + "_dni"]: x.dni, [tipo + "_email"]: x.email, [tipo + "_tel"]: x.telefono }); items.push([et, `${x.nombre}${x.dni ? " · DNI " + x.dni : ""} (nuevo)`, true]); }
+  }
+  // condiciones
+  if (d.inicio) n.inicio = d.inicio;
+  if (d.fin) n.fin = d.fin;
+  if (d.inicio && d.fin) { const m = Math.round((new Date(d.fin) - new Date(d.inicio)) / (30.44 * 864e5)); n.duracion = [12, 24, 36].includes(m) ? m : "otra"; }
+  items.push(["Plazo", d.inicio && d.fin ? `${fecha(d.inicio)} al ${fecha(d.fin)}` : d.inicio ? "Desde " + fecha(d.inicio) + " (falta el fin)" : "", !!(d.inicio && d.fin)]);
+  if (d.monto_base) n.monto_base = d.monto_base;
+  items.push(["Alquiler inicial", d.monto_base ? money(d.monto_base) : "", !!d.monto_base]);
+  if (d.indice && AJUSTE_DEF[d.indice]) n.indice = d.indice;
+  if (d.ajuste_meses) n.ajuste_meses = d.ajuste_meses;
+  const per = { 1: "mensual", 2: "bimestral", 3: "trimestral", 4: "cuatrimestral", 6: "semestral", 12: "anual" }[d.ajuste_meses] || (d.ajuste_meses ? `cada ${d.ajuste_meses} meses` : "");
+  items.push(["Actualización", d.indice || d.ajuste_meses ? `${d.indice || "índice no encontrado"}${per ? ", " + per : ""}` : "", !!(d.indice && d.ajuste_meses)]);
+  if (d.indice && !AJUSTE_DEF[d.indice]) d.notas.push(`El contrato ajusta por ${d.indice}: elegí el índice a mano.`);
+  if (d.deposito) n.deposito = d.deposito;
+  items.push(["Depósito", d.deposito ? money(d.deposito) : "", !!d.deposito]);
+  if (d.dia_vto) { n.dia_vto = d.dia_vto === +S.cfg.dia_vto ? "" : d.dia_vto; items.push(["Se paga", `del 1 al ${d.dia_vto} de cada mes`, true]); }
+  if (d.renovacion) d.notas.unshift(prev ? "Es una renovación: quedó vinculada al contrato anterior de esta propiedad." : "El contrato dice que es una renovación, pero no encontré el contrato anterior de esa dirección.");
+  n.word = { archivo: file.name, items, notas: d.notas, personas: { propietario: d.propietario, inquilino: d.inquilino } };
+  S.nc = n; S.ncArchivo = file;
+  render(); nuevoResumen();
+  const faltan = items.filter((x) => !x[2]).length;
+  toast(faltan ? `Contrato leído. Revisá ${faltan === 1 ? "1 dato que falta" : faltan + " datos que faltan"}.` : "Contrato leído: revisá los datos y guardá.");
+}
+// después de guardar: adjuntar el Word al contrato y completar DNI/email/CUIT que falten en las personas
+async function guardarArchivoContrato(id) {
+  const file = S.ncArchivo, w = S.nc?.word; S.ncArchivo = null; if (!file) return;
+  try {
+    const ext = (file.name.match(/\.(docx?|pdf)$/i) || [, "doc"])[1].toLowerCase();
+    const path = `c/${id}/contrato-${Date.now()}.${ext}`;
+    const mime = ext === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/msword";
+    const { error } = await sb.storage.from("documentos").upload(path, file, { contentType: mime });
+    if (error) throw error;
+    const { error: e2 } = await sb.from("archivos").insert({ contrato_id: id, categoria: "otro", servicio: "Contrato", path, nombre: file.name, mime, tamano: file.size });
+    if (e2) throw e2;
+  } catch (e) { toast("El contrato se guardó, pero no se pudo adjuntar el Word: " + mensajeError(e), "bad"); }
+  const c = S.contratos.get(id);
+  for (const tipo of ["propietario", "inquilino"]) {
+    const x = w?.personas?.[tipo]; if (!x || !c) continue;
+    const per = P(c[tipo + "_id"]); const cambios = {};
+    if (x.dni && !per.dni) cambios.dni = x.dni;
+    if (x.email && !per.email) cambios.email = x.email;
+    if (x.cuit && !(per.notas || "").includes(x.cuit)) cambios.notas = ((per.notas ? per.notas + " · " : "") + "CUIT/CUIL " + x.cuit).slice(0, 500);
+    if (Object.keys(cambios).length) await sb.from("personas").update(cambios).eq("id", per.id);
+  }
 }
 function modalRescindir(cid) {
   const c = S.contratos.get(+cid);
@@ -1162,6 +1252,7 @@ document.addEventListener("input", (ev) => {
 });
 document.addEventListener("change", async (ev) => {
   const t = ev.target;
+  if (t.id === "nc-word" && t.files && t.files[0]) { const fl = t.files[0]; t.value = ""; await aplicarWord(fl); return; }
   if (t.id === "nc-dir") nuevoDireccionCambio();
   if (t.id === "nc-inicio" || t.id === "nc-duracion") { const f = $("#f-nuevo"); if (f.duracion.value !== "otra" && f.inicio.value) f.fin.value = isoMas(f.inicio.value, +f.duracion.value, -1); nuevoResumen(); }
   if (t.id === "nc-fin") { const f = $("#f-nuevo"); f.duracion.value = "otra"; }

@@ -307,4 +307,15 @@ body.chat-abierto .chat-fab{display:none}
 .login .brand b,.login .brand span{display:block}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .logo{background:#f6f1f2;border-radius:12px;padding:6px 8px}}
 :root[data-theme="dark"] .logo{background:#f6f1f2;border-radius:12px;padding:6px 8px}
-@media (max-width:720px){.side .logo{width:52px;margin:0 10px 0 0;float:left}}
+@media (max-width:720px){.side .brand{display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center}.side .logo{grid-row:span 2;width:48px;margin:0;padding:3px 4px}}
+/* cargar contrato desde Word */
+.nc-word{border:2px dashed var(--accent-ink);background:var(--accent-soft)}
+.nc-word .ph{align-items:flex-start;flex-wrap:wrap}
+.nc-word-btn{cursor:pointer}
+.nc-word-res{display:flex;flex-direction:column;gap:8px}
+.nc-word-res ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 16px}
+.nc-word-res li{display:flex;gap:8px;align-items:baseline}
+.nc-word-res li span:first-child{font-weight:700;width:16px;flex:none}
+.nc-word-res li.ok span:first-child{color:var(--ok)}
+.nc-word-res li.falta span:first-child{color:var(--bad)}
+@media (max-width:900px){.nc-word-res ul{grid-template-columns:minmax(0,1fr)}}
