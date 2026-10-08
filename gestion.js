@@ -14,6 +14,23 @@ const emailDeUsuario = (u) => { u = String(u || "").trim().toLowerCase(); if (u.
   return u.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "") + "@" + DOMINIO_EQUIPO; };
 const usuarioDe = (email) => String(email || "").endsWith("@" + DOMINIO_EQUIPO) ? email.split("@")[0] : String(email || "");
 const PORTAL_URL = new URL("./", location.href).href;
+// link personal para ver y descargar un comprobante sin cuenta (lo abre el inquilino o el propietario)
+const linkComprobante = (token) => token ? new URL("comprobante.html?c=" + token, PORTAL_URL).href : "";
+const waMensaje = (tel, msg) => (wa(tel) || "https://wa.me/") + "?text=" + encodeURIComponent(msg);
+const primerNombre = (n) => { const t = String(n || "").split(","); return (t.length > 1 ? t[1] : t[0]).trim().split(/\s+/)[0] || ""; };
+function msgRecibo(p, c) {
+  const n = primerNombre(inq(c));
+  return `Hola${n ? " " + n : ""}! Te enviamos el recibo N° ${p.recibo_nro} de ${S.cfg.nombre} por ${money(p.total)} (${c.direccion}).\nLo podés ver y descargar cuando quieras en este link:\n${linkComprobante(p.token)}`;
+}
+function msgLiq(l) {
+  const n = primerNombre(P(l.propietario_id).nombre);
+  return `Hola${n ? " " + n : ""}! Te enviamos la liquidación N° ${l.nro} de ${S.cfg.nombre} por ${money(l.neto)}.\nLa podés ver y descargar cuando quieras en este link:\n${linkComprobante(l.token)}`;
+}
+function botonesLinkLiq(l) {
+  if (!l.token) return "";
+  const pr = P(l.propietario_id);
+  return `<button class="btn" data-copiarlink="${esc(linkComprobante(l.token))}">Copiar link</button><a class="btn" href="${esc(waMensaje(pr.telefono, msgLiq(l)))}" target="_blank" rel="noopener">Enviar link por WhatsApp${pr.telefono ? "" : " (elegir contacto)"}</a>`;
+}
 
 const S = {
   cfg: null, yo: null, contratos: new Map(), personas: new Map(), aj: new Map(), pg: new Map(), ov: new Map(),
@@ -279,7 +296,7 @@ function vLiquidaciones() {
   <h2>Historial</h2>
   <div class="tw"><table><thead><tr><th>N°</th><th>Fecha</th><th>Propietario</th><th>Tipo</th><th class="num">Cobrado</th><th class="num">Honorarios</th><th class="num">Neto</th><th></th></tr></thead><tbody>
   ${S.liqs.slice(0, 120).map((l) => `<tr><td class="mono">${pad5(l.nro)}</td><td class="num">${fecha(l.fecha)}</td><td>${esc(P(l.propietario_id).nombre)} ${l.anulada ? `<span class="chip bad">Anulada</span>` : ""}</td><td>${l.modalidad === "directa" ? `<span class="chip acc">Directa</span>` : "Oficina"}</td><td class="num">${money(l.bruto)}</td><td class="num">${money(l.comision)}</td><td class="num">${money(l.neto)}</td>
-  <td class="num"><button class="btn small" data-liqpdf="${l.id}">PDF</button> ${l.modalidad === "inmobiliaria" && !l.anulada ? `<button class="btn small" data-liqcomp="${l.id}">Comprobante</button> <button class="btn small danger" data-liqanular="${l.id}">Anular</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8"><div class="empty">Todavía no hay liquidaciones.</div></td></tr>`}
+  <td class="num">${l.token ? `<button class="btn small" data-liqlink="${l.id}">Link</button> ` : ""}<button class="btn small" data-liqpdf="${l.id}">PDF</button> ${l.modalidad === "inmobiliaria" && !l.anulada ? `<button class="btn small" data-liqcomp="${l.id}">Comprobante</button> <button class="btn small danger" data-liqanular="${l.id}">Anular</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8"><div class="empty">Todavía no hay liquidaciones.</div></td></tr>`}
   </tbody></table></div>`;
 }
 
@@ -961,8 +978,8 @@ function modalRecibo(pid) {
   <p>Recibimos de <b>${esc(i.nombre)}</b> la suma de <b>${money(p.total)}</b> en concepto de alquiler del período <b>${periodo(p.periodo)}</b> de <b>${esc(c.direccion)}</b>.</p>
   <div class="tw"><table><tbody>${Array.isArray(p.detalle) && p.detalle.length ? "" : `<tr><td>Alquiler</td><td class="num">${money(p.alquiler)}</td></tr>${+p.punitorio ? `<tr><td>Punitorios</td><td class="num">${money(p.punitorio)}</td></tr>` : ""}`}${filasConceptos(p)}<tr><td><b>Total</b> · ${esc(p.medio)}</td><td class="num"><b>${money(p.total)}</b></td></tr></tbody></table></div>
   ${p.anulado ? `<span class="chip bad">Anulado</span>` : ""}</div>
-  <div class="row"><button class="btn primary" data-recibopdf="${p.id}">Descargar PDF</button><button class="btn" data-recibotxt="${p.id}">Copiar para WhatsApp</button>${wa(i.telefono) ? `<a class="btn" href="${wa(i.telefono)}" target="_blank" rel="noopener">WhatsApp del inquilino</a>` : ""}</div>
-  <p class="muted" style="margin:0">El inquilino también puede descargarlo desde el portal${i.user_id ? "" : " (todavía no tiene acceso)"}.</p>`);
+  <div class="row">${p.token ? `<a class="btn primary" href="${esc(waMensaje(i.telefono, msgRecibo(p, c)))}" target="_blank" rel="noopener">Enviar link por WhatsApp${i.telefono ? "" : " (elegir contacto)"}</a><button class="btn" data-copiarlink="${esc(linkComprobante(p.token))}">Copiar link</button>` : ""}<button class="btn" data-recibopdf="${p.id}">Descargar PDF</button></div>
+  <p class="muted" style="margin:0">Con el link, el inquilino ve y descarga el recibo cuando quiera, sin cuenta y sin que ustedes tengan que mandar archivos. ${p.token ? `<button class="link" data-abrirlink="${esc(linkComprobante(p.token))}">Ver cómo lo ve el inquilino</button>` : ""}</p>`);
 }
 function filasConceptos(p) {
   const det = Array.isArray(p.detalle) && p.detalle.length ? p.detalle : null;
@@ -1088,7 +1105,11 @@ document.addEventListener("click", async (ev) => {
     if (d.archivo) { await verArchivo(d.archivo); return; }
     if (d.recibo) { modalRecibo(d.recibo); return; }
     if (d.recibopdf) { const { p, c } = buscarPago(d.recibopdf); const r = pdfRecibo(S.cfg, { direccion: c.direccion, inquilino: inq(c), carpeta: c.carpeta, propietario: P(c.propietario_id).nombre, propietario_doc: P(c.propietario_id).dni }, p); r.doc.save(r.nombre); return; }
-    if (d.recibotxt) { const { p, c } = buscarPago(d.recibotxt); copiar(`${S.cfg.nombre}\nRECIBO N° ${pad5(p.recibo_nro)} · ${fecha(p.fecha)}\nRecibimos de ${inq(c)} ${money(p.total)} por el alquiler de ${periodo(p.periodo)} de ${c.direccion}.\nTambién podés descargarlo en ${PORTAL_URL}`); return; }
+    if (d.recibotxt) { const { p, c } = buscarPago(d.recibotxt); copiar(msgRecibo(p, c)); return; }
+    if (d.copiarlink) { copiar(d.copiarlink); return; }
+    if (d.abrirlink) { window.open(d.abrirlink, "_blank", "noopener"); return; }
+    if (d.liqlink) { const l = S.liqs.find((x) => x.id === +d.liqlink); abrirModal(`<div class="mh"><div><h2>Liquidación N° ${l.nro}</h2><div class="muted">${esc(P(l.propietario_id).nombre)} · ${money(l.neto)}</div></div><button class="x" data-cerrar aria-label="Cerrar">×</button></div>
+      <p>Mandale al propietario este link: ve y descarga la liquidación cuando quiera, sin cuenta.</p><div class="row">${botonesLinkLiq(l)}<button class="btn" data-abrirlink="${esc(linkComprobante(l.token))}">Ver cómo lo ve</button></div>`); return; }
     if (d.anularpago) { if (!confirmar("¿Anular el cobro?")) return; if (await rpc("anular_pago", { p_pago: +d.anularpago }, "Cobro anulado")) { cerrarModal(); await recargar(); } return; }
     if (d.ajustar) { modalAjuste(d.ajustar); return; }
     if (d.anularajuste) { if (!confirmar()) return; const { error } = await sb.from("ajustes").update({ anulado: true }).eq("id", +d.anularajuste); if (error) throw error; toast("Ajuste anulado"); cerrarModal(); await recargar(); return; }
@@ -1177,7 +1198,7 @@ document.addEventListener("submit", async (ev) => {
         const file = $("#lp-comp").files[0];
         if (file) { try { await subirComprobanteLiquidacion(lq, file); } catch (e) { toast("La liquidación se guardó, pero no se pudo subir el comprobante: " + mensajeError(e), "bad"); } }
         await cargarTodo(); S.view = "liquidaciones"; render();
-        abrirModal(`<div class="mh"><h2>Liquidación N° ${pad5(lq.nro)}</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><p>Total liquidado: <b>${money(lq.neto)}</b></p><div class="row"><button class="btn primary" data-liqpdf="${lq.id}">Descargar PDF</button>${file ? "" : `<button class="btn" data-liqcomp="${lq.id}">Subir comprobante de transferencia</button>`}</div>`);
+        abrirModal(`<div class="mh"><h2>Liquidación N° ${pad5(lq.nro)}</h2><button class="x" data-cerrar aria-label="Cerrar">×</button></div><p>Total liquidado: <b>${money(lq.neto)}</b></p><div class="row">${botonesLinkLiq(lq)}<button class="btn" data-liqpdf="${lq.id}">Descargar PDF</button>${file ? "" : `<button class="btn" data-liqcomp="${lq.id}">Subir comprobante de transferencia</button>`}</div>`);
       }
       return;
     }

@@ -281,3 +281,16 @@ body.chat-abierto .chat-fab{display:none}
 :root[data-theme="dark"] .btn.primary{border-color:var(--accent)}
 :root[data-theme="dark"] .seg button{border-color:rgba(255,255,255,.2)}
 :root[data-theme="dark"] .chip:not(.ok):not(.warn):not(.bad):not(.acc){background:#332b2e;color:#e6dcde}
+/* página pública de un comprobante (link de recibo / liquidación) */
+.cp{max-width:760px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px}
+.cp-h .brand b{font-family:var(--f-display);font-size:24px;color:var(--accent-ink);display:block}
+.cp-h .brand span{font-size:13.5px;color:var(--muted)}
+.cp-doc{gap:16px}
+.cp-tit{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.cp-tit h1{font-size:30px}
+.cp-total{display:flex;flex-direction:column;align-items:flex-end}
+.cp-total b{font-family:var(--f-mono);font-size:26px}
+.cp-btns .btn{padding:12px 20px;font-size:16px}
+.cp-pie{font-size:14px;text-align:center}
+.cp-pie a{color:var(--accent-ink)}
+@media (max-width:600px){.cp .dl{grid-template-columns:minmax(0,1fr)}.cp-total{align-items:flex-start}.cp-btns .btn{flex:1}}
